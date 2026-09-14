@@ -1,0 +1,8 @@
+{
+  "$comment": "Optional workflow features. continuity_tracking ships enabled — the guard is stdlib-Python and portable. spend_tracking is off by default: v1 of this kit ships no cross-repo spend adapter, so Claude Code's built-in /cost is the spend readout. Turn spend_tracking on only once you wire your own session-cost adapter.",
+  "$comment_telemetry": "telemetry add-on (telemetry/README.md) — this repo HAS wired a cross-repo spend adapter, so spend_tracking is on. token_tracking drives the Claude-Token-Usage commit trailers. manage_git_hooks=false hands core.hooksPath to an external manager (e.g. pre-commit) instead of claiming it.",
+  "continuity_tracking": true,
+  "spend_tracking": true,
+  "token_tracking": true,
+  "manage_git_hooks": true
+}

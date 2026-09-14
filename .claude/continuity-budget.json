@@ -1,0 +1,11 @@
+{
+  "schema": "claude-continuity-budget/v1",
+  "calibration": 1.7,
+  "note": "Per-file real-token budgets for the always-loaded continuity tier (the installed repo's live root files that Claude Code ingests at cold start). Budgets are real-tok, each set ~15-20% above the measured healthy size of that file type. calibration = real/heuristic for Claude's BPE tokenizer (~1.7; Claude's tokenizer is less dense than OpenAI's o200k_base, whose calibration is ~1.06 — do NOT reuse that value here). The runtime uses ceil(chars/4) x calibration; no tokenizer is a runtime dependency. This is a fail-open nag, not a hard cap.",
+  "budgets": {
+    "CLAUDE.md": 6400,
+    "STATUS.md": 9600,
+    "HANDOFF.md": 19200,
+    "ROADMAP.md": 12800
+  }
+}

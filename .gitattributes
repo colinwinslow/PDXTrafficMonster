@@ -1,0 +1,6 @@
+# Keep shell/python entrypoints runnable from WSL/Linux when Windows has autocrlf enabled.
+*.sh text eol=lf
+*.py text eol=lf
+
+# telemetry add-on: upstream globs (*.sh, *.py) miss the extensionless git hooks.
+telemetry/hooks/* text eol=lf
