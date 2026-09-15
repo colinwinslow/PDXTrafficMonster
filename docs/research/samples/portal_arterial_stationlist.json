@@ -1,0 +1,1681 @@
+{"type": "FeatureCollection", "crs": {"type": "name", "properties": {"name": "EPSG:4326"}}, "features": [
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10075,
+    "reference_id": 10075,
+    "location": "NE 10th Av north of 154th St",
+    "direction": "SB",
+    "lat": 45.7333704596159,
+    "lon": -122.661794910458,
+    "reliability": "88.12",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.66179491,
+      45.73337046
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10074,
+    "reference_id": 10074,
+    "location": "NE 10th Av north of 154th St",
+    "direction": "NB",
+    "lat": 45.733370283023,
+    "lon": -122.661520699477,
+    "reliability": "88.12",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.661520699,
+      45.733370283
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10072,
+    "reference_id": 10072,
+    "location": "NE 119th St east of 50th Av",
+    "direction": "EB",
+    "lat": 45.7075855269947,
+    "lon": -122.618494657675,
+    "reliability": "0.44",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.618494658,
+      45.707585527
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10073,
+    "reference_id": 10073,
+    "location": "NE 119th St east of 50th Av",
+    "direction": "WB",
+    "lat": 45.7077570879031,
+    "lon": -122.618503323885,
+    "reliability": "0.44",
+    "agency": "Clark County",
+    "lanecount": 3
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.618503324,
+      45.707757088
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10081,
+    "reference_id": 10081,
+    "location": "NE 119th St east of 72nd Av",
+    "direction": "WB",
+    "lat": 45.7078627682214,
+    "lon": -122.596820513716,
+    "reliability": "98.59",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.596820514,
+      45.707862768
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10080,
+    "reference_id": 10080,
+    "location": "NE 119th St east of 72nd Av",
+    "direction": "EB",
+    "lat": 45.707650839836,
+    "lon": -122.596817789086,
+    "reliability": "98.59",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.596817789,
+      45.70765084
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10020,
+    "reference_id": 10020,
+    "location": "NE 134th St east of Salmon Crk Av",
+    "direction": "EB",
+    "lat": 45.7198373905248,
+    "lon": -122.638014480696,
+    "reliability": "97.60",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.638014481,
+      45.719837391
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10021,
+    "reference_id": 10021,
+    "location": "NE 134th St east of Salmon Crk Av",
+    "direction": "WB",
+    "lat": 45.7199016975093,
+    "lon": -122.638309596838,
+    "reliability": "97.60",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.638309597,
+      45.719901698
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10019,
+    "reference_id": 10019,
+    "location": "NE 134th St west of 27th Av",
+    "direction": "WB",
+    "lat": 45.7177867591163,
+    "lon": -122.645454598316,
+    "reliability": "0.09",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.645454598,
+      45.717786759
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10018,
+    "reference_id": 10018,
+    "location": "NE 134th St west of 27th Av",
+    "direction": "EB",
+    "lat": 45.7175449791443,
+    "lon": -122.645591854774,
+    "reliability": "0.09",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.645591855,
+      45.717544979
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10060,
+    "reference_id": 10060,
+    "location": "NE 137th Av south of 99th St",
+    "direction": "NB",
+    "lat": 45.692674635045,
+    "lon": -122.531938911235,
+    "reliability": "45.09",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.531938911,
+      45.692674635
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10061,
+    "reference_id": 10061,
+    "location": "NE 137th Av south of 99th St",
+    "direction": "SB",
+    "lat": 45.6926785563402,
+    "lon": -122.532109346792,
+    "reliability": "45.09",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.532109347,
+      45.692678556
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10024,
+    "reference_id": 10024,
+    "location": "NE 139th St east of 10th Av",
+    "direction": "EB",
+    "lat": 45.7217219308955,
+    "lon": -122.659888889293,
+    "reliability": "193.78",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.659888889,
+      45.721721931
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10025,
+    "reference_id": 10025,
+    "location": "NE 139th St east of 10th Av",
+    "direction": "WB",
+    "lat": 45.7219397508534,
+    "lon": -122.659864960354,
+    "reliability": "193.78",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.65986496,
+      45.721939751
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10022,
+    "reference_id": 10022,
+    "location": "NE 139th St east of Tenney Rd",
+    "direction": "EB",
+    "lat": 45.7217746064173,
+    "lon": -122.664289777182,
+    "reliability": "94.97",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.664289777,
+      45.721774606
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10023,
+    "reference_id": 10023,
+    "location": "NE 139th St east of Tenney Rd",
+    "direction": "WB",
+    "lat": 45.721994998893,
+    "lon": -122.664309786034,
+    "reliability": "94.97",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.664309786,
+      45.721994999
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10026,
+    "reference_id": 10026,
+    "location": "NE 139th St west of 3rd Ct",
+    "direction": "EB",
+    "lat": 45.7216680797078,
+    "lon": -122.669250896036,
+    "reliability": "97.90",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.669250896,
+      45.72166808
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10027,
+    "reference_id": 10027,
+    "location": "NE 139th St west of 3rd Ct",
+    "direction": "WB",
+    "lat": 45.7219009885741,
+    "lon": -122.669221533786,
+    "reliability": "97.90",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.669221534,
+      45.721900989
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10015,
+    "reference_id": 10015,
+    "location": "NE 20th Av north of 139th St",
+    "direction": "SB",
+    "lat": 45.7233256426907,
+    "lon": -122.651519397352,
+    "reliability": "95.75",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.651519397,
+      45.723325643
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10014,
+    "reference_id": 10014,
+    "location": "NE 20th Av north of 139th St",
+    "direction": "NB",
+    "lat": 45.7233038586046,
+    "lon": -122.651197953401,
+    "reliability": "95.75",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.651197953,
+      45.723303859
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10016,
+    "reference_id": 10016,
+    "location": "NE 20th Av south of 139th St",
+    "direction": "NB",
+    "lat": 45.7202855972561,
+    "lon": -122.651189516033,
+    "reliability": "192.64",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.651189516,
+      45.720285597
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10017,
+    "reference_id": 10017,
+    "location": "NE 20th Av south of 139th St",
+    "direction": "SB",
+    "lat": 45.7202816624332,
+    "lon": -122.651544835549,
+    "reliability": "192.64",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.651544836,
+      45.720281662
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10000,
+    "reference_id": 10000,
+    "location": "NE 63rd St east of Hwy 99",
+    "direction": "EB",
+    "lat": 45.6674066904766,
+    "lon": -122.66309597914,
+    "reliability": "98.59",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.663095979,
+      45.66740669
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10001,
+    "reference_id": 10001,
+    "location": "NE 63rd St east of Hwy 99",
+    "direction": "WB",
+    "lat": 45.6675754336363,
+    "lon": -122.662972897478,
+    "reliability": "98.59",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.662972897,
+      45.667575434
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10077,
+    "reference_id": 10077,
+    "location": "NE 72nd Av north of 119th St",
+    "direction": "SB",
+    "lat": 45.7095333021338,
+    "lon": -122.599542375494,
+    "reliability": "98.61",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.599542375,
+      45.709533302
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10076,
+    "reference_id": 10076,
+    "location": "NE 72nd Av north of 119th St",
+    "direction": "NB",
+    "lat": 45.7095382896748,
+    "lon": -122.59926594115,
+    "reliability": "98.61",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.599265941,
+      45.70953829
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10055,
+    "reference_id": 10055,
+    "location": "NE 72nd Av north of 88th St",
+    "direction": "SB",
+    "lat": 45.6884300449256,
+    "lon": -122.599734433203,
+    "reliability": "98.28",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.599734433,
+      45.688430045
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10054,
+    "reference_id": 10054,
+    "location": "NE 72nd Av north of 88th St",
+    "direction": "NB",
+    "lat": 45.6883359176149,
+    "lon": -122.599387087366,
+    "reliability": "98.28",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.599387087,
+      45.688335918
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10064,
+    "reference_id": 10064,
+    "location": "NE 76th St east of 137th Av",
+    "direction": "EB",
+    "lat": 45.6774401454808,
+    "lon": -122.530291916611,
+    "reliability": "98.43",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.530291917,
+      45.677440145
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10065,
+    "reference_id": 10065,
+    "location": "NE 76th St east of 137th Av",
+    "direction": "WB",
+    "lat": 45.6775996945703,
+    "lon": -122.530295641379,
+    "reliability": "98.43",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.530295641,
+      45.677599695
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10071,
+    "reference_id": 10071,
+    "location": "NE 76th St west of 107th Av",
+    "direction": "WB",
+    "lat": 45.6778426246592,
+    "lon": -122.565433161744,
+    "reliability": "98.50",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.565433162,
+      45.677842625
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10070,
+    "reference_id": 10070,
+    "location": "NE 76th St west of 107th Av",
+    "direction": "EB",
+    "lat": 45.6777048160812,
+    "lon": -122.565453077335,
+    "reliability": "98.50",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.565453077,
+      45.677704816
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10030,
+    "reference_id": 10030,
+    "location": "NE 78th St east of 30th Av",
+    "direction": "EB",
+    "lat": 45.6786424616867,
+    "lon": -122.638463107183,
+    "reliability": "0.09",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.638463107,
+      45.678642462
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10031,
+    "reference_id": 10031,
+    "location": "NE 78th St east of 30th Av",
+    "direction": "WB",
+    "lat": 45.6788552379595,
+    "lon": -122.638487942017,
+    "reliability": "0.09",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.638487942,
+      45.678855238
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10035,
+    "reference_id": 10035,
+    "location": "NE 88th St west of 32nd Av",
+    "direction": "WB",
+    "lat": 45.6860113599606,
+    "lon": -122.638357335723,
+    "reliability": "197.15",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.638357336,
+      45.68601136
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10034,
+    "reference_id": 10034,
+    "location": "NE 88th St west of 32nd Av",
+    "direction": "EB",
+    "lat": 45.6858498061795,
+    "lon": -122.638370959205,
+    "reliability": "197.15",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.638370959,
+      45.685849806
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10038,
+    "reference_id": 10038,
+    "location": "NE 99th St west of 137th Av",
+    "direction": "EB",
+    "lat": 45.6935606127869,
+    "lon": -122.532913390164,
+    "reliability": "98.48",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.53291339,
+      45.693560613
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10039,
+    "reference_id": 10039,
+    "location": "NE 99th St west of 137th Av",
+    "direction": "WB",
+    "lat": 45.6937258531141,
+    "lon": -122.532891058557,
+    "reliability": "98.48",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.532891059,
+      45.693725853
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10007,
+    "reference_id": 10007,
+    "location": "NE 99th St west of 7th Av",
+    "direction": "WB",
+    "lat": 45.6931032826349,
+    "lon": -122.66604334557,
+    "reliability": "98.73",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.666043346,
+      45.693103283
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10006,
+    "reference_id": 10006,
+    "location": "NE 99th St west of 7th Av",
+    "direction": "EB",
+    "lat": 45.6929111584501,
+    "lon": -122.666030114425,
+    "reliability": "98.73",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.666030114,
+      45.692911158
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10009,
+    "reference_id": 10009,
+    "location": "NE 99th St west of Hwy 99",
+    "direction": "WB",
+    "lat": 45.6931476876616,
+    "lon": -122.658047015042,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.658047015,
+      45.693147688
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10008,
+    "reference_id": 10008,
+    "location": "NE 99th St west of Hwy 99",
+    "direction": "EB",
+    "lat": 45.6929370455399,
+    "lon": -122.658092360137,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.65809236,
+      45.692937046
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10062,
+    "reference_id": 10062,
+    "location": "NE 99th St west of SR-503",
+    "direction": "EB",
+    "lat": 45.6933537997246,
+    "lon": -122.55371822915,
+    "reliability": "31.05",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.553718229,
+      45.6933538
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10063,
+    "reference_id": 10063,
+    "location": "NE 99th St west of SR-503",
+    "direction": "WB",
+    "lat": 45.6935243741841,
+    "lon": -122.553708556441,
+    "reliability": "31.05",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.553708556,
+      45.693524374
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10043,
+    "reference_id": 10043,
+    "location": "NE Andresen at NE 63rd St (WavetronixHD)",
+    "direction": "SB",
+    "lat": 45.669227000498694,
+    "lon": -122.60455785021516,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.60455785,
+      45.669227
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10042,
+    "reference_id": 10042,
+    "location": "NE Andresen at NE 63rd St (WavetronixHD)",
+    "direction": "NB",
+    "lat": 45.66925039732933,
+    "lon": -122.60202334748631,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.602023347,
+      45.669250397
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10047,
+    "reference_id": 10047,
+    "location": "NE Andresen at NE 78th St (WavetronixHD)",
+    "direction": "SB",
+    "lat": 45.68000981350128,
+    "lon": -122.60426571593845,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.604265716,
+      45.680009814
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10046,
+    "reference_id": 10046,
+    "location": "NE Andresen at NE 78th St (WavetronixHD)",
+    "direction": "NB",
+    "lat": 45.68003320710508,
+    "lon": -122.60173072259205,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.601730723,
+      45.680033207
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10069,
+    "reference_id": 10069,
+    "location": "NE Covington Rd south of 76th St",
+    "direction": "SB",
+    "lat": 45.6765135881339,
+    "lon": -122.574886184923,
+    "reliability": "94.63",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.574886185,
+      45.676513588
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10068,
+    "reference_id": 10068,
+    "location": "NE Covington Rd south of 76th St",
+    "direction": "NB",
+    "lat": 45.6766363322524,
+    "lon": -122.574626967338,
+    "reliability": "94.63",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.574626967,
+      45.676636332
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10052,
+    "reference_id": 10052,
+    "location": "NE Hwy 99 north of 72nd St",
+    "direction": "NB",
+    "lat": 45.6756300414466,
+    "lon": -122.662450871157,
+    "reliability": "98.61",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.662450871,
+      45.675630041
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10053,
+    "reference_id": 10053,
+    "location": "NE Hwy 99 north of 72nd St",
+    "direction": "SB",
+    "lat": 45.6756515788333,
+    "lon": -122.662848897459,
+    "reliability": "98.61",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.662848897,
+      45.675651579
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10010,
+    "reference_id": 10010,
+    "location": "NE Hwy 99 north of 99th St",
+    "direction": "NB",
+    "lat": 45.6940952455915,
+    "lon": -122.655898532896,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.655898533,
+      45.694095246
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10011,
+    "reference_id": 10011,
+    "location": "NE Hwy 99 north of 99th St",
+    "direction": "SB",
+    "lat": 45.6941736208741,
+    "lon": -122.656231519591,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.65623152,
+      45.694173621
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10013,
+    "reference_id": 10013,
+    "location": "NE Hwy 99 south of 129th St",
+    "direction": "SB",
+    "lat": 45.7138983058844,
+    "lon": -122.651253552677,
+    "reliability": "66.50",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.651253553,
+      45.713898306
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10012,
+    "reference_id": 10012,
+    "location": "NE Hwy 99 south of 129th St",
+    "direction": "NB",
+    "lat": 45.713965599694,
+    "lon": -122.650886567887,
+    "reliability": "66.50",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.650886568,
+      45.7139656
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10057,
+    "reference_id": 10057,
+    "location": "NE Hwy 99 south of 63rd St",
+    "direction": "SB",
+    "lat": 45.6669958013061,
+    "lon": -122.664378774995,
+    "reliability": "98.62",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.664378775,
+      45.666995801
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10056,
+    "reference_id": 10056,
+    "location": "NE Hwy 99 south of 63rd St",
+    "direction": "NB",
+    "lat": 45.6669675168285,
+    "lon": -122.664060404507,
+    "reliability": "98.62",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.664060405,
+      45.666967517
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10003,
+    "reference_id": 10003,
+    "location": "NE Hwy 99 south of 88th St",
+    "direction": "SB",
+    "lat": 45.6850488557572,
+    "lon": -122.660969563568,
+    "reliability": "98.58",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.660969564,
+      45.685048856
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10002,
+    "reference_id": 10002,
+    "location": "NE Hwy 99 south of 88th St",
+    "direction": "NB",
+    "lat": 45.6850159088498,
+    "lon": -122.66056696267,
+    "reliability": "98.58",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.660566963,
+      45.685015909
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10045,
+    "reference_id": 10045,
+    "location": "NE Padden Pkwy east of 78th St",
+    "direction": "WB",
+    "lat": 45.6806191649874,
+    "lon": -122.614635549196,
+    "reliability": "98.52",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.614635549,
+      45.680619165
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10044,
+    "reference_id": 10044,
+    "location": "NE Padden Pkwy east of 78th St",
+    "direction": "EB",
+    "lat": 45.6804337499559,
+    "lon": -122.614416136718,
+    "reliability": "98.52",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.614416137,
+      45.68043375
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10041,
+    "reference_id": 10041,
+    "location": "NE Padden Pkwy east of 94th Av",
+    "direction": "WB",
+    "lat": 45.6822729054582,
+    "lon": -122.573653716652,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.573653717,
+      45.682272905
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10040,
+    "reference_id": 10040,
+    "location": "NE Padden Pkwy east of 94th Av",
+    "direction": "EB",
+    "lat": 45.6819570488426,
+    "lon": -122.573680163129,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.573680163,
+      45.681957049
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10066,
+    "reference_id": 10066,
+    "location": "NE Padden Pkwy west of 94th Av",
+    "direction": "EB",
+    "lat": 45.6823530451232,
+    "lon": -122.578363873746,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 3
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.578363874,
+      45.682353045
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10067,
+    "reference_id": 10067,
+    "location": "NE Padden Pkwy west of 94th Av",
+    "direction": "WB",
+    "lat": 45.6826299372965,
+    "lon": -122.578309139541,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 5
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.57830914,
+      45.682629937
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10051,
+    "reference_id": 10051,
+    "location": "NE St Johns Rd at I-205",
+    "direction": "SB",
+    "lat": 45.696619907900256,
+    "lon": -122.61252061667331,
+    "reliability": "98.53",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.612520617,
+      45.696619908
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10050,
+    "reference_id": 10050,
+    "location": "NE St Johns Rd at I-205",
+    "direction": "NB",
+    "lat": 45.69664339334169,
+    "lon": -122.6099848707964,
+    "reliability": "98.53",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.609984871,
+      45.696643393
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10033,
+    "reference_id": 10033,
+    "location": "NE St Johns Rd south of 88th St",
+    "direction": "SB",
+    "lat": 45.6847495636107,
+    "lon": -122.625748168472,
+    "reliability": "181.46",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.625748168,
+      45.684749564
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10032,
+    "reference_id": 10032,
+    "location": "NE St Johns Rd south of 88th St",
+    "direction": "NB",
+    "lat": 45.6847509539803,
+    "lon": -122.625494179708,
+    "reliability": "181.46",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.62549418,
+      45.684750954
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10049,
+    "reference_id": 10049,
+    "location": "NE St Johns Rd west of 72nd Av",
+    "direction": "WB",
+    "lat": 45.7026423883736,
+    "lon": -122.601276045709,
+    "reliability": "97.80",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.601276046,
+      45.702642388
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10048,
+    "reference_id": 10048,
+    "location": "NE St Johns Rd west of 72nd Av",
+    "direction": "EB",
+    "lat": 45.7025016310661,
+    "lon": -122.601033529058,
+    "reliability": "97.80",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.601033529,
+      45.702501631
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10059,
+    "reference_id": 10059,
+    "location": "NE Ward Road NE of 78th St",
+    "direction": "SB",
+    "lat": 45.6803930727963,
+    "lon": -122.514631646321,
+    "reliability": "11.58",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.514631646,
+      45.680393073
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10058,
+    "reference_id": 10058,
+    "location": "NE Ward Road NE of 78th St",
+    "direction": "NB",
+    "lat": 45.6801792330159,
+    "lon": -122.514408894673,
+    "reliability": "11.58",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.514408895,
+      45.680179233
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10036,
+    "reference_id": 10036,
+    "location": "NE Ward Road southwest of 172nd Av",
+    "direction": "NB",
+    "lat": 45.6916071907859,
+    "lon": -122.496002139125,
+    "reliability": "84.55",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.496002139,
+      45.691607191
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10037,
+    "reference_id": 10037,
+    "location": "NE Ward Road southwest of 172nd Av",
+    "direction": "SB",
+    "lat": 45.6916511650088,
+    "lon": -122.496221412216,
+    "reliability": "84.55",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.496221412,
+      45.691651165
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10028,
+    "reference_id": 10028,
+    "location": "NW 36th Av north of McCann Rd",
+    "direction": "NB",
+    "lat": 45.7175179783544,
+    "lon": -122.707863599361,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.707863599,
+      45.717517978
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10029,
+    "reference_id": 10029,
+    "location": "NW 36th Av north of McCann Rd",
+    "direction": "SB",
+    "lat": 45.7174904686637,
+    "lon": -122.708153294859,
+    "reliability": "0.00",
+    "agency": "Clark County",
+    "lanecount": 1
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.708153295,
+      45.717490469
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10004,
+    "reference_id": 10004,
+    "location": "NW 78th St west of 9th Av",
+    "direction": "EB",
+    "lat": 45.6785868886998,
+    "lon": -122.68134316754,
+    "reliability": "98.58",
+    "agency": "Clark County",
+    "lanecount": 4
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.681343168,
+      45.678586889
+    ]
+  }
+},
+{
+  "type": "Feature",
+  "properties": {
+    "stationid": 10005,
+    "reference_id": 10005,
+    "location": "NW 78th St west of 9th Av",
+    "direction": "WB",
+    "lat": 45.6787931241105,
+    "lon": -122.681327820032,
+    "reliability": "98.58",
+    "agency": "Clark County",
+    "lanecount": 2
+  },
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -122.68132782,
+      45.678793124
+    ]
+  }
+}]}

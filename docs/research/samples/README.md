@@ -214,6 +214,79 @@ tags. Geometry is standard WGS84 lon/lat pairs (`[lon, lat]` per GeoJSON
 spec) — spot-checked coordinates land inside the declared bounding box and
 on real Portland-area roads.
 
+## 3. PORTAL arterial / travel-time — checked for local-street coverage (none)
+
+Pulled 2026-09-15 (same session, ~7 hours after §1) specifically to answer:
+does PORTAL have measured data for the Rose Quarter's local diversion
+streets (Interstate Ave, MLK Jr Blvd, Broadway/Weidler, Williams/Vancouver)?
+**Answer: no.** Three independent PORTAL surfaces, all negative:
+
+| File | Endpoint | Result |
+|---|---|---|
+| `portal_arterial_stationlist.json` | `GET /arterial/stationlist/` (found in the arterial page's JS bundle, not on the downloads page) | GeoJSON, **80 stations, every one `agency: "Clark County"`** (WA). Zero stations inside a Portland-city bounding box (45.45–45.62 N, -122.75– -122.55 W). Fields: `stationid`, `reference_id`, `location`, `direction`, `lat`, `lon`, `reliability`, `agency`, `lanecount`. |
+| `portal_traveltime_segment_inventory.json` | `GET /traveltime/api/seginventory/` | flat JSON, 461 segments (`source_system`: DAC 237 = freeway, TravelTime 180 = Bluetooth arterial, 41 null = WA freeways, ATMS 3). The Bluetooth arterial segments cover Powell/Foster/82nd/Sandy/Division/McLoughlin (SE), Barbur/Capitol/Macadam (SW), Beaverton/Hillsboro, US-26 Mt Hood, US-101. **None on any N/NE Portland arterial.** The only "Broadway" hits are the I-5/I-405 freeway ramps at Broadway. |
+| (not saved — empty) | `GET /arterial/api/voyagevolume/?start_date=…&end_date=…&format=json` — the downloads page's "Voyage Volume" form, whose only params are `start_date`, `end_date`, `format` (no location selector) | **`[]` for every range tried**: 2026-09-10→11, 2025-09-10→11, 2024-09-10→11. Either dormant or needs an undocumented param; not usable as-is. |
+| (404) | `GET /arterial/data_availability/` | referenced by the arterial page's JS but returns 404. |
+
+```bash
+curl -s "https://new.portal.its.pdx.edu/arterial/stationlist/"              -o portal_arterial_stationlist.json
+curl -s "https://new.portal.its.pdx.edu/traveltime/api/seginventory/"        -o portal_traveltime_segment_inventory.json
+curl -s "https://new.portal.its.pdx.edu/arterial/api/voyagevolume/?start_date=2026-09-10&end_date=2026-09-11&format=json"   # -> []
+```
+
+Endpoint discovery note: the arterial page (`/arterial/`) has no
+`data-apibase` forms; its endpoints (`/arterial/stationlist/`,
+`/arterial/onequantitycomp/`, `/arterial/twoquantities/`,
+`/arterial/data_availability/`) were found by grepping the compiled bundle
+`/static/CACHE/js/output.9542a92c5444.js`. The hash in that filename will
+change on the next PORTAL deploy.
+
+Consequence for the project: any surface-street layer would have to come
+from a non-PORTAL source (PBOT's static AADT counts are baseline-only, not
+closure-period) and would need an invariant-1 caveat. Recorded in ADR-0001.
+
+## 4. TriMet (bus positions as an arterial congestion proxy) and TomTom (probe speeds)
+
+Pulled/probed 2026-09-15 after §3 ruled out PORTAL for surface streets.
+Both are **live-only** — neither has a public history — so the project's
+collector (`scripts/collect_live.py`, deployed on claude-box as
+`pdxtrafficmonster-collector.service`) archives raw responses from the moment
+keys exist. Captured data lands **outside the repo** at
+`/home/claude/data/pdxtrafficmonster/<source>/<UTC day>/…gz` with a
+`manifest.jsonl` (redacted URL, HTTP status, bytes, sha256) per source.
+
+### TriMet
+
+| Item | Finding |
+|---|---|
+| Static GTFS | `https://developer.trimet.org/schedule/gtfs.zip` — public, **no key**, 29.5 MB, `Last-Modified: 2026-09-10`. `feed_info.txt`: version `20260823-20260910-0900`, valid 2026-08-23 → 2027-02-27, so it spans the closure. Saved: `trimet_gtfs/{agency,routes,route_directions,calendar,calendar_dates,feed_info}.txt` plus `trimet_gtfs/trimet_arterial_route_shapes.geojson` — 159 `shape_id` LineStrings for routes 4, 6, 8, 17, 24, 35, 44, 72, 75 (route 6 = "Martin Luther King Jr Blvd", 35 = "Macadam/Greeley", 44 = "Capitol Hwy/N Rosa Parks", 4 = "Fessenden/Woodstock"). `stop_times.txt` (156 MB) and full `shapes.txt` (29 MB) deliberately not committed; re-download to regenerate. |
+| GTFS-realtime | `https://developer.trimet.org/ws/V1/VehiclePositions` (protobuf). **Requires an AppID**: without one the server returns `403 A valid appID is required to access this resource.` Free registration at `https://developer.trimet.org/appid/registration/`. TripUpdate and Alerts feeds exist at `/ws/V1/TripUpdate/` and `/ws/V1/FeedSpecAlerts/`. |
+| Terms | `developer.trimet.org/terms_of_use.shtml` §5 (Web Services API): *"TriMet grants you a limited, revocable license to use, reproduce, redistribute and display the Data"* — explicitly redistributable, so invariant 2 is satisfied. Page is served as ISO-8859-1 (a UTF-8 read throws). |
+| PORTAL transit archive | `/transit/downloadquarterlydata` offers only quarterly `passenger-census-*` snapshots (2019–2024, stop-level load); `/trimetvisual/` is quarterly load heatmaps. **No vehicle-speed history anywhere on PORTAL.** |
+
+Proxy caveat, to be stated on the visualization: between stops, buses and
+cars move at similar speeds in congestion; in free-flow, cars are faster. So
+bus-derived speed is a congestion indicator, not a car-speed measurement.
+
+### TomTom Traffic API
+
+| Item | Finding |
+|---|---|
+| Flow Segment Data | `GET https://api.tomtom.com/traffic/services/4/flowSegmentData/{style}/{zoom}/json?key=…&point=lat,lon&unit=MPH`. Snaps to the nearest road fragment; response fields confirmed from the reference page (`docs.tomtom.com/traffic-api/documentation/tomtom-maps/v1/traffic-flow/flow-segment-data`): `frc`, `currentSpeed`, `freeFlowSpeed`, `currentTravelTime`, `freeFlowTravelTime`, `confidence`, `roadClosure`, `coordinates`, optional `openlr`. **Free tier: 20K requests/month** ("Traffic Flow API — Segment Data", pricing page). |
+| Vector Flow Tiles | `GET https://api.tomtom.com/traffic/map/4/tile/flow/{style}/{z}/{x}/{y}.pbf?key=…`, styles `absolute` / `relative` / `relative-delay` / `reduced-sensitivity`. One tile carries every segment's speed in its area — far better coverage per request. **Free tier: 200K/month.** (Traffic *Incidents* Details is the 2.5K/month product — easy to confuse.) |
+| Terms | `docs.tomtom.com/legal/terms-and-conditions` is JavaScript-rendered and returned no readable text to curl; the consumer-site terms (`tomtom.com/en-gb/legal/terms-of-use/`) don't govern the API. **Open: read the developer T&C at registration for storage/redistribution limits** — recorded in ADR-0001. |
+| Key | Free developer key, registration at `developer.tomtom.com`. Not yet registered as of this pull. |
+
+Collector budget (defaults in `scripts/collect_live.py`): tiles at z14 over
+bbox 45.52,-122.70 → 45.58,-122.64 (`absolute` style) every 5 min, capped
+5,500/day; six Flow Segment probe points every 20 min, capped 600/day. Probe
+points were derived from the OSM sample (way midpoints on MLK @ Broadway, MLK
+@ Fremont, Interstate @ Russell, Interstate @ Going) plus PORTAL stations 3121
+and 3169 (SB/NB I-5 @ Broadway) so TomTom probe speed can be checked directly
+against PORTAL loop speed at the same spot. A first OSM-nearest-way attempt
+for the freeway points landed 587 m off and merged NB/SB — station coordinates
+are the right anchor there.
+
 ## What wasn't pulled
 
 - ODOT TripCheck API and WSDOT Traveler Information API (both need a
