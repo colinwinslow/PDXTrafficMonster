@@ -1,0 +1,22 @@
+[Unit]
+Description=PDXTrafficMonster live collector (TriMet GTFS-RT + TomTom flow)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=claude
+Group=claude
+WorkingDirectory=/home/claude/repos/PDXTrafficMonster
+Environment=PDXTM_ENV_FILE=/home/claude/.config/pdxtrafficmonster/env
+ExecStart=/usr/bin/python3 /home/claude/repos/PDXTrafficMonster/scripts/collect_live.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/claude/data/pdxtrafficmonster
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
