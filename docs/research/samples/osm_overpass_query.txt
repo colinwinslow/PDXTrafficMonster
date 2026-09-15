@@ -1,0 +1,9 @@
+[out:json][timeout:180];
+(
+  way["ref"~"^I 5$"]["highway"](45.35,-122.85,45.70,-122.45);
+  way["ref"~"^I 405$"]["highway"](45.35,-122.85,45.70,-122.45);
+  way["ref"~"^I 205$"]["highway"](45.35,-122.85,45.70,-122.45);
+  way["name"="North Interstate Avenue"]["highway"](45.35,-122.85,45.70,-122.45);
+  way["name"~"Martin Luther King"]["highway"](45.35,-122.85,45.70,-122.45);
+);
+out geom;
