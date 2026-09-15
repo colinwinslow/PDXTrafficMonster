@@ -26,6 +26,7 @@ Keep this list in sync at `/closeout` whenever an ADR's status changes.
 
 ## Current ADRs
 
-- 0001 — `<title>` (draft)
+- 0001 — Visualization concept: animated geographic ribbon flow map; freeway volume ribbons + live arterial congestion layer (draft)
+- 0002 — Rendering stack: Python frame pipeline (GeoPandas + matplotlib → PNG → ffmpeg) (draft)
 <!-- Add new ADRs in numeric position. Sub-numbered amendments (e.g. 0001a) go
      immediately after their parent. -->
