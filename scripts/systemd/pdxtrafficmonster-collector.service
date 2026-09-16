@@ -1,15 +1,20 @@
 [Unit]
-Description=PDXTrafficMonster live collector (TriMet GTFS-RT + TomTom flow)
+Description=PDXTrafficMonster live collector (TriMet GTFS-RT/static + TomTom flow)
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 User=claude
 Group=claude
-WorkingDirectory=/home/claude/repos/PDXTrafficMonster
 Environment=PDXTM_ENV_FILE=/home/claude/.config/pdxtrafficmonster/env
-ExecStart=/usr/bin/python3 /home/claude/repos/PDXTrafficMonster/scripts/collect_live.py
+# Installed copy, not the git worktree: a checkout of an older commit must not change what runs.
+ExecStart=/usr/bin/python3 /usr/local/lib/pdxtrafficmonster/collect_live.py
+# The collector feeds the watchdog per fetch and per downloaded chunk; this only has to exceed
+# one request's ceiling (DEADLINE in collect_live.py, max 900 s for gtfs.zip), not a whole cycle.
+WatchdogSec=1200
 Restart=always
 RestartSec=10
 NoNewPrivileges=true

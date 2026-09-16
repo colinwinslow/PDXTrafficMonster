@@ -278,8 +278,13 @@ bus-derived speed is a congestion indicator, not a car-speed measurement.
 | Key | Free developer key, registration at `developer.tomtom.com`. Not yet registered as of this pull. |
 
 Collector budget (defaults in `scripts/collect_live.py`): tiles at z14 over
-bbox 45.52,-122.70 → 45.58,-122.64 (`absolute` style) every 5 min, capped
-5,500/day; six Flow Segment probe points every 20 min, capped 600/day. Probe
+bbox 45.52,-122.70 → 45.58,-122.64 (`absolute` style; exactly 20 tiles) every
+5 min, capped 5,500/day (≈170K/31 days vs the 200K tier); six Flow Segment
+probe points every 20 min, capped 600/day (≈13K/31 days vs 20K). **TomTom is
+disabled by default** (`PDXTM_TOMTOM_ENABLED=0`) until the developer T&C has
+been read — the key alone does not start collection (ADR-0003). The static
+`gtfs.zip` is snapshotted weekly with no key, so the feed version behind any
+archived bus position is always on disk. Probe
 points were derived from the OSM sample (way midpoints on MLK @ Broadway, MLK
 @ Fremont, Interstate @ Russell, Interstate @ Going) plus PORTAL stations 3121
 and 3169 (SB/NB I-5 @ Broadway) so TomTom probe speed can be checked directly
