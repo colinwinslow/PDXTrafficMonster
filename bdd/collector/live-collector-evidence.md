@@ -1,4 +1,4 @@
-# Evidence: live collector v0.7 — run 2026-09-16T16:00:20Z on claude-box
+# Evidence: live collector v0.8 — run 2026-09-16T16:05Z on claude-box
 
 Overall: **A PASS (live)**, **F PASS (live)**,
 **H PASS in part (live: restart-persistence half; unit: exception half)**,
@@ -14,9 +14,9 @@ No paired spec (`docs/specs/live-collector.md`) yet: the collector was built
 ahead of its spec because both keyed sources are live-only and every
 uncollected day is lost (ADR-0003). Spec is retroactive (STATUS.md).
 
-Supersedes the earlier evidence in git history. **Six** architecture review
+Supersedes the earlier evidence in git history. **Seven** architecture review
 rounds ran against this artifact; each returned CONCERNS and the findings were
-fixed, hence v0.7. Round 7 is pending at the time of writing.
+fixed, hence v0.8. Round 8 is pending at the time of writing.
 
 Two findings are worth carrying forward, because both are the same defect
 shape — a fix applied to one place and not its siblings:
@@ -35,12 +35,19 @@ shape — a fix applied to one place and not its siblings:
   not the *chunked read + per-chunk pet + deadline* that the success branch
   already had. A dribbling error body therefore blew its deadline by ~25× and
   petted the watchdog zero times — and because `run_once` is single-threaded,
-  that stalls all four sources until SIGABRT. Both branches now share one
-  `_read_guarded` helper, so there is no longer a sibling to forget.
+  that stalls all four sources until SIGABRT.
+- **Round 7:** the round-6 fix introduced `_read_guarded` and **claimed** both
+  branches now shared it — in the code comment *and* in this file — but only
+  the error path was ever wired to it. The success path kept its own inline
+  copy, and the two had already diverged (only one had the `r.length`
+  truncation guard). The fix for the sibling pattern re-created the sibling
+  pattern, and I documented it as done before it was. Now genuinely shared,
+  with `test_fetch_has_exactly_one_body_reading_loop` to keep it that way.
 
-All closed and pinned by real-socket tests. The recurrence is the point: four
-rounds in a row found the same shape, which is why round 6 was asked to sweep
-for it systematically rather than wait for it to surface again.
+All closed and pinned by real-socket tests. The recurrence is the point: five
+rounds in a row found the same shape, the last one inside the fix for it. That
+is why the honesty of a claim like "both branches now share X" has to be
+checked against the code, not against the intent of the change.
 
 Commands, verbatim, from repo root unless noted:
 
@@ -48,7 +55,7 @@ Commands, verbatim, from repo root unless noted:
 ./scripts/install_collector.sh                    # runs the suite, installs to /usr/local/lib, restarts
 python3 -W error::ResourceWarning -m unittest tests.test_collect_live
 wc -l < /home/claude/data/pdxtrafficmonster/trimet_static/manifest.jsonl
-python3 -c "import json,time; s=json.load(open('.../schedule.json')); now=time.time(); print({k: round((v-now)/3600,2) for k,v in s.items()})"
+python3 -c "import json,time; s=json.load(open('.../schedule.json'))['next_due']; now=time.time(); print({k: round((v-now)/3600,2) for k,v in s.items()})"
 cat /home/claude/data/pdxtrafficmonster/status.json
 find /home/claude/data/pdxtrafficmonster -mindepth 1 | sort
 systemctl show pdxtrafficmonster-collector.service -p MainPID -p NRestarts -p WatchdogUSec
@@ -57,7 +64,7 @@ systemctl show pdxtrafficmonster-collector.service -p MainPID -p NRestarts -p Wa
 ## Unit test run (raw tail)
 
 ```
-Ran 43 tests in 1.759s
+Ran 48 tests in 1.765s
 
 OK
 ```
@@ -119,6 +126,15 @@ I  tomtom_segments' budget.spend deleted
    FAIL: test_segments_charge_the_budget_before_fetching_too
 J  backoff persistence removed from save_schedule
    FAIL: test_backoff_ladder_survives_a_restart
+Each control failed its target test and ONLY that test.
+
+--- round-7 controls, each re-broken alone against the full 48-test suite ---
+K  success path re-inlines its own read loop (i.e. the state round 6 shipped)
+   FAIL: test_fetch_has_exactly_one_body_reading_loop
+L  error-body limit removed        FAIL: test_error_body_is_capped_and_the_cap_is_marked
+M  truncation marker removed       FAIL: test_error_body_is_capped_and_the_cap_is_marked
+N  429 cross-style break removed   FAIL: test_a_429_abandons_every_style_not_just_the_current_one
+O  backoff range validation weakened  FAIL: test_corrupt_schedule_file_does_not_crash
 Each control failed its target test and ONLY that test.
 ```
 

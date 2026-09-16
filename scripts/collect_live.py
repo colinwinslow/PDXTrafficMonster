@@ -27,7 +27,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 ENV_FILE = os.environ.get("PDXTM_ENV_FILE", "/home/claude/.config/pdxtrafficmonster/env")
-USER_AGENT = "PDXTrafficMonster-collector/0.7 (+https://github.com/colinwinslow/PDXTrafficMonster)"
+USER_AGENT = "PDXTrafficMonster-collector/0.8 (+https://github.com/colinwinslow/PDXTrafficMonster)"
 TRIMET_VP_URL = "https://developer.trimet.org/ws/V1/VehiclePositions"
 TRIMET_GTFS_URL = "https://developer.trimet.org/schedule/gtfs.zip"
 TOMTOM_TILE_URL = "https://api.tomtom.com/traffic/map/4/tile/flow/{style}/{z}/{x}/{y}.pbf"
@@ -35,6 +35,7 @@ TOMTOM_SEG_URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/abso
 KEY_PARAMS = ("appID", "key")
 SECRET_VARS = ("TRIMET_APP_ID", "TOMTOM_API_KEY")
 MIN_FREE_BYTES = 1 << 30
+ERROR_BODY_LIMIT = 2000  # how much of an HTTP error body is worth keeping for diagnosis
 TICK_SECONDS = 5
 CHUNK = 1 << 20
 SOURCES = ("trimet", "trimet_static", "tomtom_tiles", "tomtom_segments")
@@ -199,24 +200,26 @@ class BudgetGuard:
 def _read_guarded(r, deadline, pet, clock, start, limit=None):
     """Read a body in chunks, petting the watchdog per chunk and honouring `deadline`.
 
-    Returns (body, timed_out). Used for BOTH the success and the HTTP-error body: a slow or
-    dribbling error body is just as capable of stalling every source as a slow success body,
-    and `run_once` is single-threaded.
+    Returns (body, flag) where flag is None, "deadline" or "limit". This is the ONLY body-reading
+    loop in this module, used by both the success and the HTTP-error path: a slow or dribbling
+    error body stalls every source just as effectively as a slow success body, because run_once
+    is single-threaded. Keeping one loop is deliberate — two copies diverged within one review
+    round the last time this was split.
     """
     chunks, total = [], 0
-    read1 = getattr(r, "read1", None) or r.read
+    read_chunk = getattr(r, "read1", None) or r.read
     while True:
         if deadline is not None and clock() - start > deadline:
-            return b"".join(chunks), True
-        c = read1(CHUNK)
+            return b"".join(chunks), "deadline"
+        c = read_chunk(CHUNK)
         if not c:
-            return b"".join(chunks), False
+            return b"".join(chunks), None
         chunks.append(c)
         total += len(c)
         if pet:
             pet()
         if limit is not None and total >= limit:
-            return b"".join(chunks)[:limit], False
+            return b"".join(chunks)[:limit], "limit"
 
 
 def fetch(url, timeout=20, deadline=None, pet=None, clock=time.monotonic):
@@ -225,18 +228,9 @@ def fetch(url, timeout=20, deadline=None, pet=None, clock=time.monotonic):
     start = clock()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            chunks = []
-            while True:
-                if deadline is not None and clock() - start > deadline:
-                    return 0, "DeadlineExceeded", b""
-                # read1, not read: read(n) blocks until n bytes or EOF, which would collapse a
-                # small body to a single chunk and make the per-chunk pet/deadline inert.
-                c = r.read1(CHUNK)
-                if not c:
-                    break
-                chunks.append(c)
-                if pet:
-                    pet()
+            body, flag = _read_guarded(r, deadline, pet, clock, start)
+            if flag == "deadline":
+                return 0, "DeadlineExceeded", b""
             # read1() does NOT raise IncompleteRead for identity/Content-Length bodies: on a
             # premature peer close it just returns b"". Without this check a truncated download
             # is archived as a complete 200 with a sha256 over partial bytes — fabricated
@@ -247,7 +241,7 @@ def fetch(url, timeout=20, deadline=None, pet=None, clock=time.monotonic):
             # this collector fetches serves Content-Length or chunked — see ADR-0003 "Open".
             if getattr(r, "length", None):
                 return 0, "IncompleteRead", b""
-            return r.status, r.headers.get("Content-Type", ""), b"".join(chunks)
+            return r.status, r.headers.get("Content-Type", ""), body
     except urllib.error.HTTPError as e:
         # The error body gets the SAME treatment as the success body, deliberately: it can raise
         # IncompleteRead (raising here escapes fetch(), losing the manifest line and the backoff
@@ -256,10 +250,15 @@ def fetch(url, timeout=20, deadline=None, pet=None, clock=time.monotonic):
         # SIGABRT). Either way the HTTP status is still reported, because that is the fact the
         # manifest needs.
         try:
-            err_body, _ = _read_guarded(e, deadline, pet, clock, start, limit=2000)
+            err_body, flag = _read_guarded(e, deadline, pet, clock, start, limit=ERROR_BODY_LIMIT)
         except (OSError, ValueError, http.client.HTTPException):
-            err_body = b""
-        return e.code, e.headers.get("Content-Type", "") if e.headers else "", err_body
+            err_body, flag = b"", None
+        # Mark a clipped error body rather than letting the manifest imply the server sent exactly
+        # ERROR_BODY_LIMIT bytes — a stored length that isn't the real length is a small synthesis.
+        ctype = e.headers.get("Content-Type", "") if e.headers else ""
+        if flag:
+            ctype = f"{ctype} ({flag}-truncated)".strip()
+        return e.code, ctype, err_body
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, http.client.HTTPException) as e:
         # HTTPException covers IncompleteRead — a peer closing before Content-Length is satisfied,
         # the normal failure of a large download on a flaky link. It is NOT an OSError, and if it
@@ -457,13 +456,17 @@ class Collector:
         self._defer("tomtom_tiles", interval * self.backoff["tomtom_tiles"])
         self.save_schedule(cfg["PDXTM_DATA_DIR"])
         n_ok = 0
+        rate_limited = False
         for style in styles:
+            if rate_limited:
+                break  # a 429 must abandon the whole cycle, not just the current style's tiles
             for x, y in tiles:
                 url = TOMTOM_TILE_URL.format(style=style, z=z, x=x, y=y) + "?" + urllib.parse.urlencode({"key": key})
                 status, ctype, body = self._fetch("tomtom_tiles", url)
                 ok, _ = store(cfg["PDXTM_DATA_DIR"], "tomtom_tiles", f"{style}_z{z}_{x}_{y}", "pbf", url, status, ctype, body, now)
                 n_ok += ok
                 if status == 429:
+                    rate_limited = True
                     break
         self.backoff["tomtom_tiles"] = 1 if n_ok == need else min(self.backoff["tomtom_tiles"] * 2, MAX_BACKOFF["tomtom_tiles"])
         self._defer("tomtom_tiles", interval * self.backoff["tomtom_tiles"])

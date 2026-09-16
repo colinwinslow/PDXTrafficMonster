@@ -295,6 +295,35 @@ class TestRealSocketTruncation(unittest.TestCase):
             self.assertGreaterEqual(c.next_due["trimet_static"] - c.clock(), cl.ERROR_DEFER["trimet_static"])
 
 
+class TestReadGuarded(unittest.TestCase):
+    """One body-reading loop, used by both paths. Two copies diverged inside a single review
+    round the last time this was split, so these pin that it is actually shared."""
+
+    def test_fetch_has_exactly_one_body_reading_loop(self):
+        src = read(os.path.join(os.path.dirname(__file__), "..", "scripts", "collect_live.py"))
+        fetch_src = src[src.index("def fetch("):src.index("def store(")]
+        self.assertEqual(fetch_src.count("_read_guarded("), 2,
+                         "both the success and the error path must call the shared helper")
+        self.assertNotIn("read1(CHUNK)", fetch_src,
+                         "fetch() should not re-implement the chunked read inline")
+
+    def test_error_body_is_capped_and_the_cap_is_marked(self):
+        srv = TrickleServer(declared=9000, actual=9000, chunk=1000, status=b"503 Service Unavailable")
+        self.addCleanup(srv.close)
+        st, ct, body = cl.fetch(srv.url)
+        self.assertEqual(st, 503)
+        self.assertEqual(len(body), cl.ERROR_BODY_LIMIT, "error bodies must be capped")
+        self.assertIn("truncated", ct,
+                      "a clipped body must say so, or the manifest implies the server sent exactly the cap")
+
+    def test_short_error_body_is_not_marked_truncated(self):  # control for the above
+        srv = TrickleServer(declared=10, actual=10, status=b"403 Forbidden")
+        self.addCleanup(srv.close)
+        st, ct, body = cl.fetch(srv.url)
+        self.assertEqual((st, len(body)), (403, 10))
+        self.assertNotIn("truncated", ct)
+
+
 class TestSchedule(unittest.TestCase):
     WALL = 1_700_000_000.0
 
@@ -460,6 +489,24 @@ class TestBudgetGuard(unittest.TestCase):
             day2 = datetime(2026, 9, 16, 0, 1, tzinfo=timezone.utc)
             self.assertEqual(cl.BudgetGuard(path).remaining("tomtom_tiles", 10, day2), 10)
 
+    def test_corrupt_schedule_file_does_not_crash(self):
+        # Sibling of the budget test below — it existed for budget.json but not schedule.json.
+        # Note the honest limit: a corrupt schedule silently zeroes every next_due, so the next
+        # cycle re-pulls the 29.5 MB gtfs.zip. Only reachable via external corruption, since
+        # save_schedule writes tmp+os.replace.
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
+            path = os.path.join(d, "schedule.json")
+            for bad in ('{"next_due": null}', '{"backoff": "x"}', '{"next_due": {"trimet": "soon"}}',
+                        '[1,2]', 'not json', '{"next_due": {"trimet": 1.7e9}, "backoff": {"trimet": 99}}'):
+                with open(path, "w") as f:
+                    f.write(bad)
+                c = cl.Collector(clock=FakeClock(), pet=lambda: None, wall=lambda: 1_700_000_000.0)
+                c.load_schedule(cfg)  # must not raise
+                for s in cl.SOURCES:
+                    self.assertTrue(1 <= c.backoff[s] <= cl.MAX_BACKOFF[s],
+                                    f"{bad}: {s} restored an out-of-range backoff {c.backoff[s]}")
+
     def test_corrupt_budget_file_resets_instead_of_crashing(self):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "budget.json")
@@ -522,6 +569,22 @@ class TestCycle(unittest.TestCase):
             r2 = c.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
             self.assertEqual(len(calls), 1)  # weekly: no immediate refetch
             self.assertEqual(r2, {})
+
+    def test_a_429_abandons_every_style_not_just_the_current_one(self):
+        # The break exited only the inner tile loop, so a second style still fired requests
+        # after the rate limit. Its segments sibling has one loop, so it was already correct.
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999",
+                       PDXTM_TOMTOM_TILE_ZOOM="12", PDXTM_TOMTOM_TILE_STYLES="absolute,relative")
+            calls = []
+
+            def rate_limited(url, timeout=20, deadline=None, pet=None, clock=None):
+                calls.append(url)
+                return (429, "text/plain", b"slow down") if "tile/flow" in url else (200, "", b"payload")
+            cl.fetch = rate_limited
+            make().run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+            self.assertEqual(sum("tile/flow" in u for u in calls), 1,
+                             "a 429 must stop the whole tile cycle, across styles")
 
     def test_tomtom_key_without_enable_flag_never_fetches_tomtom(self):
         with tempfile.TemporaryDirectory() as d:
