@@ -1,6 +1,6 @@
 ---
 id: 0001
-title: Visualization concept — animated geographic ribbon flow map; freeway volume ribbons + live arterial congestion layer
+title: Visualization concept — animated geographic ribbon flow map; freeway volume ribbons + TriMet-proxy arterial layer
 status: draft
 date: 2026-09-15
 supersedes: []
@@ -8,7 +8,13 @@ superseded-by: null
 tags: [visualization, concept, scope, data]
 ---
 
-# ADR-0001: Visualization concept — animated geographic ribbon flow map; freeway volume ribbons + live arterial congestion layer
+# ADR-0001: Visualization concept — animated geographic ribbon flow map; freeway volume ribbons + TriMet-proxy arterial layer
+
+> **Amended 2026-09-16** (still `draft`, so amended in place rather than
+> superseded). TomTom is removed from this decision: its developer T&C, read
+> after the original draft, prohibits storing API Results at all. The arterial
+> layer is now TriMet-only. Original text kept below except where it named
+> TomTom; the amendment is marked inline.
 
 ## Context
 
@@ -24,12 +30,25 @@ provides the road centerlines with per-segment lane counts. PORTAL has **no**
 measured data for any Portland surface street — its arterial stations are all
 Clark County, WA, and its Bluetooth travel-time segments skip N/NE Portland
 entirely — so the local-street diversion story needs other public sources.
-Two exist, both live-only with no public history: TriMet's GTFS-realtime
-vehicle positions (bus speed between stops as a congestion proxy; terms
-explicitly permit redistribution) and TomTom's Traffic Flow API (probe-based
-segment speeds, free tier, terms still to be read). Waze is excluded by
-invariant 2. Because these sources start on the day collection starts
-(2026-09-15), the pre-closure arterial baseline is already gone.
+Two candidates existed, both live-only with no public history: TriMet's
+GTFS-realtime vehicle positions (bus speed between stops as a congestion proxy;
+terms explicitly permit redistribution) and TomTom's Traffic Flow API
+(probe-based segment speeds, free tier). Waze is excluded by invariant 2.
+Because these sources start on the day collection starts (2026-09-15), the
+pre-closure arterial baseline is already gone.
+
+**Amendment 2026-09-16 — TomTom is out.** Its Portal T&C §11.4 prohibits
+"caching or storing of any Results" outside a client-side cache bounded by the
+response's own `max-age`; §11.6.1 forbids deriving a secondary database;
+§20.2.3 is a warranty against combining Licensed Products with data that would
+subject them to a copyleft licence, and our geometry is ODbL OSM (named in
+§1's Open Source License definition); and §2.1/2.2 grant a licence only for a
+"Permitted Solution" (requires Asset Management Functionality, which this
+project lacks) or "Evaluation Use" (defined as *internal* evaluation). Any one
+of those rules it out; together they leave no configuration in which this
+project may store TomTom Results. Full citations in
+`docs/research/samples/README.md` §4. The arterial layer is therefore
+**TriMet-only**.
 
 ## Decision
 
@@ -39,11 +58,11 @@ I-5, I-405, and I-205, with ribbon width driven by measured PORTAL detector
 volume, over the window 2026-09-01 (ten days of pre-closure baseline) through
 reopening — plus an arterial congestion layer on the local diversion streets
 (MLK Jr Blvd, Interstate Ave, Williams/Vancouver, Broadway/Weidler) drawn as
-speed-colored lines, never volume-width, from two live sources collected from
-2026-09-15 on: TriMet bus speeds between stops and TomTom probe speeds.** The
+speed-colored lines, never volume-width, derived from TriMet bus speeds between
+stops, collected live from 2026-09-15 on.** The
 arterial layer's baseline is the post-reopening period, not pre-closure. Every
-arterial reading is caveated on screen as proxy (TriMet) or probe (TomTom),
-never as counted volume.
+arterial reading is caveated on screen as a **transit proxy**, never as counted
+volume and never as measured car speed.
 
 ## Rationale
 
@@ -64,20 +83,25 @@ never as counted volume.
   §3), so no surface street has a vehicle count. What *is* measurable is
   speed: TriMet buses report position every few seconds, and between stops a
   bus in congestion moves like the cars around it (in free flow, cars are
-  faster — so the proxy under-reads speed only when it doesn't matter). TomTom
-  probe speeds are the direct measurement and cross-check the proxy; two
-  probe points sit on PORTAL loop stations so TomTom can be checked against
-  loops too. Widening an arterial by anything but a count would violate
-  invariant 1; coloring it by a measured speed does not.
+  faster — so the proxy under-reads speed only when it doesn't matter).
+  Widening an arterial by anything but a count would violate invariant 1;
+  coloring it by a measured speed does not.
+- **The proxy now stands alone, and that is a real weakening.** The original
+  draft paired it with TomTom probe speeds as an independent check, including
+  two probe points placed on PORTAL loop stations 3121/3169 so probe speed
+  could be validated against loop speed at the same spot. The licence removed
+  that. What remains is one indirect measurement with no second opinion, which
+  raises the bar on how the layer is captioned.
 - **Reopening as the arterial baseline.** Live-only sources cannot recover
   2026-09-01 → 09-14. Rather than fake a baseline, the arterial story is told
   closure → relief: the weeks after reopening are the "normal" the closure
   weeks are compared to. The freeway ribbons keep their real pre-closure
   baseline from PORTAL.
-- **TriMet over Waze.** Waze for Cities is partner-only under an agreement
-  that forbids republication and its live map is a ToS scrape (invariant 2).
-  TriMet's API terms grant a license to "use, reproduce, redistribute and
-  display" the data.
+- **TriMet over Waze and TomTom.** Waze for Cities is partner-only under an
+  agreement that forbids republication and its live map is a ToS scrape
+  (invariant 2). TomTom forbids storing Results at all (see amendment above).
+  TriMet's API terms §5 grant a licence to "use, reproduce, redistribute and
+  display" the data — the only one of the three compatible with a public repo.
 - **Start 2026-09-01, not 2026-09-11.** Ten days of baseline is what makes the
   closure visible as a *change* rather than as the only thing on screen.
   PORTAL retains it (verified: complete hourly data from 09-01).
@@ -103,17 +127,17 @@ never as counted volume.
 - The arterial layer begins 2026-09-15, four days into the closure, and its
   quality depends on a collector that must keep running unattended on
   claude-box through reopening. A gap in collection is a gap on screen.
-- Two more external dependencies (TriMet AppID, TomTom key), both registered
-  by the human and kept off-repo in
-  `/home/claude/.config/pdxtrafficmonster/env`.
+- One external dependency (TriMet AppID), registered by the human and kept
+  off-repo in `/home/claude/.config/pdxtrafficmonster/env`.
+- The arterial layer has no independent validation source. If the bus proxy
+  turns out to be unusable (too few buses per interval, dwell time
+  contaminating segment speeds), there is no fallback and the layer is dropped
+  rather than replaced.
 - Video is a fixed narrative — no scrubbing, no hover. Interactivity would be
   a new ADR.
 
 **Open:**
-- TomTom developer terms (storage/redistribution of API responses) were not
-  machine-readable; must be read at registration. If they forbid archiving
-  raw responses, the TomTom layer drops to display-only or is removed by a
-  superseding ADR.
+- ~~TomTom developer terms~~ — **RESOLVED 2026-09-16: prohibited, removed.**
 - Bus-speed-between-stops derivation: which stop pairs, how to exclude dwell
   time, minimum samples per interval. Spec question.
 - Segment ↔ station width rule (nearest station by milepost? upstream only?

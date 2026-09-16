@@ -268,29 +268,33 @@ Proxy caveat, to be stated on the visualization: between stops, buses and
 cars move at similar speeds in congestion; in free-flow, cars are faster. So
 bus-derived speed is a congestion indicator, not a car-speed measurement.
 
-### TomTom Traffic API
+### TomTom Traffic API — RULED OUT 2026-09-16 (licence)
 
-| Item | Finding |
-|---|---|
-| Flow Segment Data | `GET https://api.tomtom.com/traffic/services/4/flowSegmentData/{style}/{zoom}/json?key=…&point=lat,lon&unit=MPH`. Snaps to the nearest road fragment; response fields confirmed from the reference page (`docs.tomtom.com/traffic-api/documentation/tomtom-maps/v1/traffic-flow/flow-segment-data`): `frc`, `currentSpeed`, `freeFlowSpeed`, `currentTravelTime`, `freeFlowTravelTime`, `confidence`, `roadClosure`, `coordinates`, optional `openlr`. **Free tier: 20K requests/month** ("Traffic Flow API — Segment Data", pricing page). |
-| Vector Flow Tiles | `GET https://api.tomtom.com/traffic/map/4/tile/flow/{style}/{z}/{x}/{y}.pbf?key=…`, styles `absolute` / `relative` / `relative-delay` / `reduced-sensitivity`. One tile carries every segment's speed in its area — far better coverage per request. **Free tier: 200K/month.** (Traffic *Incidents* Details is the 2.5K/month product — easy to confuse.) |
-| Terms | `docs.tomtom.com/legal/terms-and-conditions` is JavaScript-rendered and returned no readable text to curl; the consumer-site terms (`tomtom.com/en-gb/legal/terms-of-use/`) don't govern the API. **Open: read the developer T&C at registration for storage/redistribution limits** — recorded in ADR-0001. |
-| Key | Free developer key, registration at `developer.tomtom.com`. Not yet registered as of this pull. |
+Colin supplied the TomTom Portal Terms & Conditions on 2026-09-16, resolving
+ADR-0001's open question. **TomTom cannot be used for this project.** Four
+independent grounds, each sufficient on its own:
 
-Collector budget (defaults in `scripts/collect_live.py`): tiles at z14 over
-bbox 45.52,-122.70 → 45.58,-122.64 (`absolute` style; exactly 20 tiles) every
-5 min, capped 5,500/day (≈170K/31 days vs the 200K tier); six Flow Segment
-probe points every 20 min, capped 600/day (≈13K/31 days vs 20K). **TomTom is
-disabled by default** (`PDXTM_TOMTOM_ENABLED=0`) until the developer T&C has
-been read — the key alone does not start collection (ADR-0003). The static
-`gtfs.zip` is snapshotted weekly with no key, so the feed version behind any
-archived bus position is always on disk. Probe
-points were derived from the OSM sample (way midpoints on MLK @ Broadway, MLK
-@ Fremont, Interstate @ Russell, Interstate @ Going) plus PORTAL stations 3121
-and 3169 (SB/NB I-5 @ Broadway) so TomTom probe speed can be checked directly
-against PORTAL loop speed at the same spot. A first OSM-nearest-way attempt
-for the freeway points landed 587 m off and merged NB/SB — station coordinates
-are the right anchor there.
+| Clause | Text | Why it bites |
+|---|---|---|
+| **§11.4** | "The caching or **storing** of any Results shall be prohibited" — the only exception is client-side caching bounded by the response's own cache-control `max-age` | "Results" is defined (§1) as "any information delivered by the Maps APIs in response to a request … **map data tiles** and route information". Flow tiles and Flow Segment Data are Results. Archiving them to disk for weeks is exactly the prohibited act, and it is the collector's entire job. |
+| **§11.6.1** | may not use content "for the creation of any **secondary or derived database** populated wholly or partially with your data and/or data supplied … by any third party" | The visualization is precisely a derived dataset combining TomTom speeds with PORTAL counts and OSM geometry. |
+| **§20.2.3** | warranty that you will not combine Licensed Products with other data "IN ANY MANNER WHICH MAY RESULT IN THE LICENSED PRODUCTS … BECOMING SUBJECT TO … AN OPEN SOURCE LICENSE AND/OR A COPYLEFT LICENSE" | §1 lists **ODbL** explicitly as an Open Source License. Our road geometry is OSM, which is ODbL. Rendering TomTom-derived speeds onto OSM geometry in a public repo is the named risk. |
+| **§2.1 / §2.2** | the licence covers a "Permitted Solution" or "Evaluation Use" | "Permitted Solution" (§1) requires **Asset Management Functionality** — tracking/routing of mobile assets — which this project has not got. "Evaluation Use" (§1) is "**internal** evaluation and testing". A published video is neither. |
+
+Also noted: §18 makes API keys Confidential Information; §17.3 requires
+un-obscured TomTom attribution; §23.3.2 terminates accounts idle 90 days.
+
+This is not a "with caveats" outcome. There is no configuration of this project
+in which storing TomTom Results is permitted, so the collector's TomTom sources
+were **deleted**, not left gated — a disabled flag is an invitation to flip it.
+Recorded against `CLAUDE.md` invariant 2. The T&C text Colin supplied is the
+evidence; it is not committed here (TomTom's, not ours), but every clause cited
+above is quoted verbatim.
+
+Cost of the removal, stated plainly: the arterial layer now rests **solely** on
+the TriMet bus proxy, with no independent probe-speed source to validate it
+against. The two probe points deliberately placed on PORTAL loop stations 3121
+and 3169 — intended as a probe-vs-loop cross-check — are gone with it.
 
 ## What wasn't pulled
 

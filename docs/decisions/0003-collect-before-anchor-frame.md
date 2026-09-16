@@ -14,8 +14,9 @@ tags: [process, data, collector, scope]
 
 `CLAUDE.md` requires the simplest observable artifact first — for this
 project, one rendered frame (ADR-0001). The arterial layer in ADR-0001 rests
-on two sources with no public history: TriMet GTFS-realtime and TomTom
-Traffic Flow. Data from those sources exists only if something is recording
+on sources with no public history: TriMet GTFS-realtime, and at the time this
+was written TomTom Traffic Flow (since removed — ADR-0001 amendment). Data from
+such sources exists only if something is recording
 it at the time; a frame rendered next week cannot include a day nobody
 captured. So on 2026-09-15 a collector daemon, systemd unit, installer, and
 tests were built and deployed *before* any frame existed — plumbing before
@@ -42,9 +43,14 @@ the artifact.
   with a hole in it.
 - Raw-bytes storage keeps the exception honest: nothing is interpreted early,
   so no design is locked in by the collector.
-- The TomTom gate (`PDXTM_TOMTOM_ENABLED`, default off) is the concrete form
-  of "same invariants as the visualization": invariant 2 is checked before
-  the archive exists, not after.
+- The per-source gate is the concrete form of "same invariants as the
+  visualization": invariant 2 is checked before the archive exists, not after.
+  **This paid for itself on 2026-09-16.** TomTom shipped gated off pending its
+  T&C; when the terms were read they turned out to prohibit storing Results
+  entirely (ADR-0001 amendment). Because the gate defaulted closed, not one
+  prohibited byte was ever written — the sources were deleted having collected
+  nothing. Had the default been "archive and ask later", the remedy would have
+  been deleting an unlawful archive instead of deleting dead code.
 - Static GTFS is snapshotted weekly alongside the realtime feed because a
   bus speed between two stops is only traceable (invariant 1) against the
   `stops`/`trips`/`shapes` of the feed version that was live when it was
@@ -57,6 +63,10 @@ the artifact.
   GTFS immediately) instead of from whenever the pipeline exists.
 
 **Constrains:**
+- A source whose licence is unread does not collect. That is a real cost —
+  TomTom's gate meant no probe data exists for 2026-09-15/16, which would have
+  been usable had the terms permitted it — and it is the right trade, because
+  the alternative risks an archive that must be destroyed.
 - Retention: raw snapshots are kept for the life of the project (est. 2–5 GB
   through reopening on a 27 GB volume); the collector stops fetching below
   1 GiB free rather than deleting anything. Pruning is a human decision.
@@ -73,26 +83,28 @@ collector. Round 8 verified the code CLEAN — 20 real-socket paths through
 `fetch()`, 60 mutations with null controls, no correctness, data-integrity or
 silent-stop defect — and the loop was stopped there. What remains below is
 **missing test coverage over correct code**, plus small honesty gaps. It is
-recorded rather than fixed because the project's actual blocker is the two API
-keys, not collector robustness, and because each additional round has been
+recorded rather than fixed because the project's actual blocker is the TriMet
+AppID, not collector robustness, and because each additional round has been
 returning findings of lower severity than the last.
+
+*(Items that applied only to the TomTom sources — daily-cap coverage, the 429
+cross-style break, charge-before-fetch — were dropped on 2026-09-16 with those
+sources. The rest still stand.)*
 
 - **Unpinned-but-correct guards** (a mutation survives the suite): `_fetch`'s
   `deadline=DEADLINE[source]` wiring; `urlopen(timeout=...)`; the error path's
   inner `except (OSError, ValueError, HTTPException)` — i.e. the round-5 escape
   itself has no regression test; `ok = status == 200 and len(body) > 0`, so an
   empty 200 stored as a real capture is unpinned.
-- **Sibling gaps in the tests** (not the code): the 429 break is pinned for
-  tiles but not segments; backoff's effect on `next_due` is asserted for
-  `trimet` only. The code is correct for all of them.
+- **Sibling gaps in the tests** (not the code): backoff's effect on `next_due`
+  is asserted for `trimet` only. The code is correct for both sources.
 - **A truncated error body is reported with its short length unmarked**, while
   a *capped* one is marked `(limit-truncated)` — the same argument as the cap
   marker, applied to one sibling and not the other.
 - `urllib.request.Request()` sits outside `fetch()`'s `try`; unreachable today
   because every URL is an https module constant.
 - `(limit-truncated)` is written bare when a server sends no `Content-Type`.
-- `budget.json` keys for past days are pruned only on write; `warn_hourly` has
-  no cap on distinct keys.
+- `warn_hourly` has no cap on distinct keys.
 - Nothing alerts on a stale heartbeat; failures that keep the process alive
   are found by looking (`status.json`). Cheap to add via a timer if the
   closure runs long.
@@ -118,6 +130,6 @@ returning findings of lower severity than the last.
 
 ## References
 
-- ADR-0001 (arterial layer, TomTom terms "Open"), ADR-0002
+- ADR-0001 (arterial layer; amended 2026-09-16 to drop TomTom), ADR-0002
 - `CLAUDE.md` — "Anchor-artifact discipline"
 - `scripts/collect_live.py`, `bdd/collector/live-collector-bdd.md`
