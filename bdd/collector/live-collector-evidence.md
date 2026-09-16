@@ -1,4 +1,4 @@
-# Evidence: live collector v0.6 — run 2026-09-16T15:54:19Z on claude-box
+# Evidence: live collector v0.7 — run 2026-09-16T16:00:20Z on claude-box
 
 Overall: **A PASS (live)**, **F PASS (live)**,
 **H PASS in part (live: restart-persistence half; unit: exception half)**,
@@ -14,9 +14,9 @@ No paired spec (`docs/specs/live-collector.md`) yet: the collector was built
 ahead of its spec because both keyed sources are live-only and every
 uncollected day is lost (ADR-0003). Spec is retroactive (STATUS.md).
 
-Supersedes the earlier evidence in git history. **Five** architecture review
+Supersedes the earlier evidence in git history. **Six** architecture review
 rounds ran against this artifact; each returned CONCERNS and the findings were
-fixed, hence v0.6. Round 6 is pending at the time of writing.
+fixed, hence v0.7. Round 7 is pending at the time of writing.
 
 Two findings are worth carrying forward, because both are the same defect
 shape — a fix applied to one place and not its siblings:
@@ -30,7 +30,17 @@ shape — a fix applied to one place and not its siblings:
   but not the `HTTPError` branch, where `e.read()` on a short error body raises
   `IncompleteRead` *inside* an except block that the general handler does not
   cover. It escaped `fetch()` entirely: no manifest line, no backoff ladder,
-  green heartbeat. Both now closed and pinned by real-socket tests.
+  green heartbeat.
+- **Round 6:** the round-5 fix gave the error branch *exception* handling but
+  not the *chunked read + per-chunk pet + deadline* that the success branch
+  already had. A dribbling error body therefore blew its deadline by ~25× and
+  petted the watchdog zero times — and because `run_once` is single-threaded,
+  that stalls all four sources until SIGABRT. Both branches now share one
+  `_read_guarded` helper, so there is no longer a sibling to forget.
+
+All closed and pinned by real-socket tests. The recurrence is the point: four
+rounds in a row found the same shape, which is why round 6 was asked to sweep
+for it systematically rather than wait for it to surface again.
 
 Commands, verbatim, from repo root unless noted:
 
@@ -47,7 +57,7 @@ systemctl show pdxtrafficmonster-collector.service -p MainPID -p NRestarts -p Wa
 ## Unit test run (raw tail)
 
 ```
-Ran 39 tests in 0.238s
+Ran 43 tests in 1.759s
 
 OK
 ```
@@ -87,7 +97,7 @@ FAIL: test_past_epoch_makes_a_source_due_immediately
 
 --- control: unguarded e.read() restored on the HTTPError branch (round-5 finding 1) ---
 ERROR: test_truncated_error_body_still_yields_its_status_not_an_escape
-ERROR: test_erroring_source_records_a_manifest_line_and_backs_off
+ERROR: test_erroring_static_source_records_a_manifest_line_and_defers_for_hours
 http.client.IncompleteRead: IncompleteRead(50 bytes read, 4950 more expected)
    journal: "trimet_static: cycle error IncompleteRead ...; deferring 21600s"
    (i.e. escaped fetch(), no manifest line, no backoff ladder)
@@ -98,6 +108,18 @@ AssertionError: 4 != 16 : trimet ladder saturated at 4, not MAX_BACKOFF
 
 --- brittleness check: behaviour-preserving refactor (cap = MAX_BACKOFF[...]; min(..., cap)) ---
 Ran 4 tests — OK   (the ladder test pins behaviour, not source text)
+
+--- round-6 controls, each re-broken alone against the full 43-test suite ---
+G  plain e.read() restored (no deadline/pet on the error body)
+   FAIL: test_dribbling_error_body_honours_the_deadline_and_pets_the_watchdog
+   (suite also ran 5.2s vs 1.7s — the blocking read visible in the runtime)
+H  trimet_static's error defer deleted
+   FAIL: test_erroring_static_source_records_a_manifest_line_and_defers_for_hours
+I  tomtom_segments' budget.spend deleted
+   FAIL: test_segments_charge_the_budget_before_fetching_too
+J  backoff persistence removed from save_schedule
+   FAIL: test_backoff_ladder_survives_a_restart
+Each control failed its target test and ONLY that test.
 ```
 
 The backoff test was itself rewritten this round: round 5 showed the original
@@ -105,8 +127,14 @@ grepped the source, which made it simultaneously tautological (it could not see
 a wrong *value*) and brittle (a behaviour-preserving refactor failed it). It
 now drives real failures until the ladder saturates.
 
-**Two controls failed to fail, and each exposed a defect in the test rather
-than in the code.** (1) `test_every_source_persists_its_schedule_before_fetching`
+**Four controls across the series failed to fail, and each exposed a defect in
+a TEST rather than in the code** — two found by me, two by round 6. Round 6's:
+`test_erroring_source_records_a_manifest_line_and_backs_off` never asserted the
+backoff its name promised, and its neighbouring `>= ERROR_DEFER` assertion was
+satisfied by the ordinary 7-day interval, so deleting the static error-defer
+entirely left the suite green; and the tiles charge-before-fetch test had no
+segments sibling, so deleting the segments `budget.spend` also left it green.
+Both now asserted directly (control H and I above). Mine: (1) `test_every_source_persists_its_schedule_before_fetching`
 matched sources by substring, and `"trimet" in url` also matches
 `developer.trimet.org/schedule/gtfs.zip` — so with `_trimet`'s save removed it
 silently read the *static* handler's save and reported OK. Fixed with exact
@@ -124,28 +152,43 @@ branch that does not occur in production and passed while the code was broken.
 
 ## Scenario A — runs before any key exists: PASS (live)
 
-All of the below is from the **current v0.6 process, PID 2172056**.
+All of the below is from the **current v0.7 process, PID 2182331** (started
+2026-09-16 09:00:20 PDT = 16:00:20Z), except the waiting-line cadence, which is
+quoted from the v0.6 process (PID 2172056) and noted as such.
 
 Given — env file absent. When — installed, started from `/usr/local/lib`:
 ```
-Active: active (running) since Wed 2026-09-16 08:54:19 PDT
-Main PID: 2172056 (python3)
-2026-09-16T08:54:19-07:00 python3[2172056]: 2026-09-16T15:54:19+00:00 collector starting; env file /home/claude/.config/pdxtrafficmonster/env
+Active: active (running) since Wed 2026-09-16 09:00:20 PDT
+Main PID: 2182331 (python3)
+```
+Then — the legacy flat `schedule.json` was migrated in place, epochs preserved
+byte-for-byte, and the 7-day static epoch honoured across the format change:
+```
+before: {"trimet": 1789574465.116559, "trimet_static": 1790178171.695807, ...}
+after:  {"next_due": {"trimet": 1789574465.1165593, "trimet_static": 1790178171.6958072, ...},
+         "backoff": {"trimet": 1, "trimet_static": 1, "tomtom_tiles": 1, "tomtom_segments": 1}}
+$ wc -l < trimet_static/manifest.jsonl
+2      <- still 2: no refetch triggered by the format change
 ```
 Then — heartbeat (1 s old when sampled), keys false, TomTom gated, disk healthy:
 ```
 $ date -u +%FT%TZ ; cat status.json
-2026-09-16T15:55:10Z
+2026-09-16T16:00:47Z
 {
- "heartbeat": "2026-09-16T15:55:09.997277+00:00",
+ "heartbeat": "2026-09-16T16:00:45.265774+00:00",
  "env_error": null,
  "keys_present": {"TRIMET_APP_ID": false, "TOMTOM_API_KEY": false},
  "tomtom_enabled": false,
- "disk_free_bytes": 27758915584,
+ "disk_free_bytes": 27748970496,
  "last_results": {},
- "next_due_in_s": {"trimet": 55, "trimet_static": 604062, "tomtom_tiles": 60, "tomtom_segments": 60}
+ "last_results_at": null,
+ "backoff": {"trimet": 1, "trimet_static": 1, "tomtom_tiles": 1, "tomtom_segments": 1},
+ "next_due_in_s": {"trimet": 20, "trimet_static": 603726, "tomtom_tiles": 25, "tomtom_segments": 25}
 }
 ```
+`last_results_at` and `backoff` are new in v0.7: a sticky `last_results` with no
+timestamp cannot be distinguished from a fresh one, and the ladder state was
+previously invisible to anyone reading `status.json` to diagnose a stall.
 `schedule.json` independently agrees with those due times (`trimet: 55s`,
 `trimet_static: 604061s`, both tomtom `60s`), and the process is in
 `hrtimer_nanosleep` — i.e. idling on its tick, not wedged.

@@ -27,7 +27,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 ENV_FILE = os.environ.get("PDXTM_ENV_FILE", "/home/claude/.config/pdxtrafficmonster/env")
-USER_AGENT = "PDXTrafficMonster-collector/0.6 (+https://github.com/colinwinslow/PDXTrafficMonster)"
+USER_AGENT = "PDXTrafficMonster-collector/0.7 (+https://github.com/colinwinslow/PDXTrafficMonster)"
 TRIMET_VP_URL = "https://developer.trimet.org/ws/V1/VehiclePositions"
 TRIMET_GTFS_URL = "https://developer.trimet.org/schedule/gtfs.zip"
 TOMTOM_TILE_URL = "https://api.tomtom.com/traffic/map/4/tile/flow/{style}/{z}/{x}/{y}.pbf"
@@ -196,6 +196,29 @@ class BudgetGuard:
         os.replace(tmp, self.path)
 
 
+def _read_guarded(r, deadline, pet, clock, start, limit=None):
+    """Read a body in chunks, petting the watchdog per chunk and honouring `deadline`.
+
+    Returns (body, timed_out). Used for BOTH the success and the HTTP-error body: a slow or
+    dribbling error body is just as capable of stalling every source as a slow success body,
+    and `run_once` is single-threaded.
+    """
+    chunks, total = [], 0
+    read1 = getattr(r, "read1", None) or r.read
+    while True:
+        if deadline is not None and clock() - start > deadline:
+            return b"".join(chunks), True
+        c = read1(CHUNK)
+        if not c:
+            return b"".join(chunks), False
+        chunks.append(c)
+        total += len(c)
+        if pet:
+            pet()
+        if limit is not None and total >= limit:
+            return b"".join(chunks)[:limit], False
+
+
 def fetch(url, timeout=20, deadline=None, pet=None, clock=time.monotonic):
     """GET url. Reads in chunks, feeding `pet()` per chunk; aborts past `deadline` seconds."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
@@ -226,12 +249,14 @@ def fetch(url, timeout=20, deadline=None, pet=None, clock=time.monotonic):
                 return 0, "IncompleteRead", b""
             return r.status, r.headers.get("Content-Type", ""), b"".join(chunks)
     except urllib.error.HTTPError as e:
-        # e.read() can itself raise IncompleteRead (a short error body) — and raising HERE escapes
-        # fetch() entirely, because this except block is not covered by the one below. That loses
-        # the manifest line AND the backoff ladder for a source that is merely erroring, which is
-        # the "stops collecting while looking healthy" failure this collector exists to avoid.
+        # The error body gets the SAME treatment as the success body, deliberately: it can raise
+        # IncompleteRead (raising here escapes fetch(), losing the manifest line and the backoff
+        # ladder), and it can dribble (a plain e.read() is one blocking whole-body read, so it
+        # honours no deadline and pets the watchdog zero times — stalling all four sources until
+        # SIGABRT). Either way the HTTP status is still reported, because that is the fact the
+        # manifest needs.
         try:
-            err_body = e.read()[:2000]
+            err_body, _ = _read_guarded(e, deadline, pet, clock, start, limit=2000)
         except (OSError, ValueError, http.client.HTTPException):
             err_body = b""
         return e.code, e.headers.get("Content-Type", "") if e.headers else "", err_body
@@ -301,6 +326,7 @@ class Collector:
         self.last_warn = {}
         self.secrets = []
         self.schedule_loaded = False
+        self.last_results_at = None
         signal.signal(signal.SIGTERM, self._sig)
         signal.signal(signal.SIGINT, self._sig)
 
@@ -335,9 +361,16 @@ class Collector:
             return
         if not isinstance(saved, dict):
             return
+        # Accepts the legacy flat {source: epoch} layout as well as {"next_due": ..., "backoff": ...}.
+        due = saved.get("next_due") if isinstance(saved.get("next_due"), dict) else saved
+        saved_backoff = saved.get("backoff") if isinstance(saved.get("backoff"), dict) else {}
+        for s in SOURCES:
+            b = saved_backoff.get(s)
+            if isinstance(b, int) and 1 <= b <= MAX_BACKOFF[s]:
+                self.backoff[s] = b
         now_wall, now_mono = self.wall(), self.clock()
         for s in SOURCES:
-            v = saved.get(s)
+            v = due.get(s)
             if isinstance(v, (int, float)):
                 # Clamp: a stored epoch in the future (clock ahead during the previous run, a
                 # restored snapshot, a start before NTP) must not park a source indefinitely —
@@ -348,7 +381,10 @@ class Collector:
 
     def save_schedule(self, data_dir):
         now_wall, now_mono = self.wall(), self.clock()
-        out = {s: now_wall + max(0.0, self.next_due[s] - now_mono) for s in SOURCES}
+        # The backoff ladder is persisted alongside next_due: restarting a saturated ladder at ×1
+        # would hammer an endpoint that is already failing, which is what the ladder exists to stop.
+        out = {"next_due": {s: now_wall + max(0.0, self.next_due[s] - now_mono) for s in SOURCES},
+               "backoff": dict(self.backoff)}
         tmp = os.path.join(data_dir, "schedule.json.tmp")
         with open(tmp, "w") as f:
             json.dump(out, f)
@@ -510,7 +546,11 @@ class Collector:
             "keys_present": {k: bool(cfg.get(k)) for k in SECRET_VARS},
             "tomtom_enabled": cfg.get("PDXTM_TOMTOM_ENABLED", "0") == "1",
             "disk_free_bytes": free,
+            # Stamped: last_results is sticky (it holds the last NON-empty cycle), so without a
+            # timestamp a reader cannot tell a 2-second-old success from a 6-day-old one.
             "last_results": results,
+            "last_results_at": self.last_results_at,
+            "backoff": dict(self.backoff),
             "next_due_in_s": {k: round(max(0.0, v - self.clock())) for k, v in self.next_due.items()},
         }
         tmp = os.path.join(data_dir, "status.json.tmp")
@@ -529,6 +569,7 @@ class Collector:
             r = self.run_once(cfg, budget, now)
             if r:
                 last_results = r
+                self.last_results_at = now.isoformat()
                 log("fetched " + json.dumps(r))
         except Exception as e:
             log(scrub(f"cycle error: {type(e).__name__}: {e}", secrets_of(cfg)))

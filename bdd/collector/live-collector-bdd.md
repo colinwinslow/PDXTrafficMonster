@@ -39,7 +39,13 @@ Then neither the journal nor any `manifest.jsonl` contains the key value
 Given a source returns non-200 (e.g. 403 bad AppID, 429 rate limit)
 When the fetch completes
 Then a manifest line records the status with `path: null`, no file is written,
-  and that source's next attempt backs off (×2, capped) while others continue.
+  and that source's next attempt is delayed while the others continue —
+  by a ×2 backoff ladder (capped per source) for `trimet`, `tomtom_tiles` and
+  `tomtom_segments`, and by a fixed multi-hour defer for `trimet_static`,
+  which has no ladder because its normal interval is a week.
+And given the error body arrives slowly rather than failing outright
+Then the read is still bounded by that source's deadline and still feeds the
+  watchdog, because a single blocking read would stall every other source too.
 And given a response is TRUNCATED (declared `Content-Length` not delivered)
 Then it is recorded as a failure — never stored as a successful capture with a
   sha256 over partial bytes, which would be fabricated provenance
