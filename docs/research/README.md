@@ -20,4 +20,6 @@ are **not load-bearing** — they may or may not promote to a spec or ADR.
 ## Current research notes
 
 - `i5-closure-data-sources` — Public data sources for the I-5 southbound
-  Rose Quarter closure (open)
+  Rose Quarter closure (promoted-to-adr 2026-09-16 → ADR-0001/0002)
+- `samples/` — real pulled data with provenance (PORTAL, OSM, TriMet GTFS,
+  TomTom findings); not a research note, but the evidence the ADRs cite

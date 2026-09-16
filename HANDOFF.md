@@ -4,7 +4,8 @@
 
 ```text
 Local path:  /home/claude/repos/PDXTrafficMonster
-GitHub:      (not yet created)
+GitHub:      https://github.com/colinwinslow/PDXTrafficMonster
+Branch:      claude/sweet-turing-qmqv6u (all work so far; no PR yet)
 ```
 
 ## What this project is
@@ -18,34 +19,50 @@ the closure squeezes the primary corridor.
 
 ## Current direction
 
-Phase 0: research is done, concept and stack are not yet chosen. The research
-session identified PORTAL (Portland State University's regional transportation
-data archive) as the strongest candidate primary source — free, public,
-no partnership gate — because it's the only source with freeway-level
-speed/volume data across all three affected corridors (I-5, I-405, I-205)
-simultaneously. ODOT TripCheck (incidents, message signs) and WSDOT (Vancouver,
-WA side) round it out as supporting/annotation data. Waze and Google's real
-traffic data were ruled out: Waze CCP is partnership-gated and forbids
-redistribution, and Google's comparable historical data is an enterprise
-BigQuery product with no public access path.
+Concept and stack are decided in ADR-0001 and ADR-0002 (see their `status`
+for draft vs accepted). The deliverable is a pre-rendered video: ribbons on
+real OSM road geometry for I-5/I-405/I-205, widened by PORTAL loop-detector
+volume (real 2026-09-01 baseline, PORTAL archives it), plus an arterial layer
+on MLK / Interstate / Williams-Vancouver / Broadway-Weidler colored by speed
+only, from TriMet bus positions (proxy) and TomTom probe speeds (direct) —
+both live-only, collected from 2026-09-15, with the post-reopening weeks as
+their baseline. Rendering is a Python pipeline (GeoPandas + matplotlib
+LineCollection → PNG per frame → ffmpeg).
+
+Two things a new session must know that the code doesn't say:
+
+- **A collector is running on claude-box** (`pdxtrafficmonster-collector.service`,
+  `scripts/collect_live.py`) writing to `/home/claude/data/pdxtrafficmonster/`
+  (off-repo). It is idle until `TRIMET_APP_ID` and `TOMTOM_API_KEY` exist in
+  `/home/claude/.config/pdxtrafficmonster/env` (human registers; never paste
+  keys into a chat), and TomTom additionally needs `PDXTM_TOMTOM_ENABLED=1`
+  after its T&C is read (ADR-0003). Static GTFS snapshots need no key and
+  should already be landing weekly. Check `status.json` first thing; the
+  running copy is `/usr/local/lib/pdxtrafficmonster/collect_live.py`, so a
+  code change needs `scripts/install_collector.sh` to take effect.
+- **PORTAL has no Portland arterial data** — checked three ways, recorded in
+  `docs/research/samples/README.md` §3. Don't re-search it.
 
 ## Latest completed work
 
-Repo seeded 2026-09-14: workflow kit installed, `docs/research/
-i5-closure-data-sources.md` written up from the research session. No
-visualization code exists yet.
+2026-09-15→16: real PORTAL + OSM samples with provenance
+(`docs/research/samples/`), ADR-0001/0002 drafted, collector deployed and
+Scenario A verified live (`bdd/collector/live-collector-evidence.md`).
 
 ## Recommended next step
 
-Pull a real sample from PORTAL (station list + field names near the Rose
-Quarter) to confirm the data is usable before committing to a stack — then
-write the ADR that picks the visualization concept and rendering approach.
-See `STATUS.md` "Active work" for the full breakdown.
+Pipeline slice 1: `/spec render-frame` and produce the anchor artifact — one
+PNG frame from one real PORTAL hour — before any other plumbing. Regenerate
+the collector evidence the moment a key lands. See `STATUS.md`.
 
 ## Constraints / guardrails
 
-- Don't use Waze data or scrape Google Maps traffic tiles — see
-  `CLAUDE.md` invariant 2 and the research note's "dead ends" section.
-- The closure is a real, time-boxed event (started 2026-09-11, ~5 weeks) —
-  don't let the project drift past the point where the data is still
-  timely/interesting.
+- Don't use Waze data or scrape Google Maps traffic tiles — `CLAUDE.md`
+  invariant 2. TriMet's API terms permit redistribution; TomTom's developer
+  T&C are unread (ADR-0001 "Open") — if they forbid archiving, drop that layer.
+- Arterials are speed-colored, never volume-widened — nothing on a surface
+  street is counted (invariant 1).
+- The closure is time-boxed (started 2026-09-11, ~5 weeks). Every uncollected
+  day is a gap in the arterial layer; the freeway story is safe in PORTAL.
+- Samples README gotchas: PORTAL `end_date` is exclusive; endpoints need the
+  trailing slash; Overpass needs a `User-Agent`.

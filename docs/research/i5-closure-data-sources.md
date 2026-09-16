@@ -1,7 +1,8 @@
 ---
 title: Public data sources for the I-5 southbound Rose Quarter closure
-status: open
+status: promoted-to-adr
 date: 2026-09-14
+promoted: 2026-09-16
 ---
 
 # Research: Public data sources for the I-5 southbound Rose Quarter closure
@@ -103,5 +104,20 @@ real-time info and offers static closure maps/fact sheets only.
 
 ## Resolution
 
-Open — not yet promoted. Next step is a real PORTAL data sample, then an ADR
-choosing the visualization concept and rendering stack.
+Promoted 2026-09-16 to ADR-0001 (concept + sources) and ADR-0002 (stack),
+with ADR-0003 recording the collect-before-anchor exception. What the real
+pulls changed relative to this note (`docs/research/samples/README.md`):
+
+- PORTAL confirmed as primary — open API, no auth, hourly + raw 20 s, data
+  complete to ~18 h behind real time. **But PORTAL has no Portland arterial
+  data** (arterial stations are all Clark County WA; Bluetooth segments skip
+  N/NE Portland) — the "arterial signal data" line in Tier 1 above does not
+  apply to this project's streets.
+- The local-street layer therefore comes from TriMet GTFS-realtime (bus speed
+  between stops as a congestion proxy; terms permit redistribution) and TomTom
+  Traffic Flow (probe speeds; free tier; developer T&C still to read). Both
+  are live-only, collected from 2026-09-15 by `scripts/collect_live.py`.
+- The three open sub-questions: (1) answered in the samples README; (2) the
+  freeway story has a real 09-01 baseline, the arterial story uses
+  post-reopening as its baseline; (3) retrospective build, but collection
+  had to start immediately — hence ADR-0003.
