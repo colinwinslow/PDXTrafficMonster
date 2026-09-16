@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Live-data collector: TriMet GTFS-RT vehicle positions + static GTFS, TomTom traffic flow.
+"""Live-data collector: TriMet GTFS-RT vehicle positions + the static GTFS they resolve against.
 
-Stores every response as raw bytes with a manifest line, so the archive is
-provenance, not interpretation. Stdlib only. Re-reads the env file every
-cycle so a key added later is picked up without a restart. Each source is
-isolated: one failing source cannot stall or overspend another, and the
+Stores every response as raw bytes with a manifest line, so the archive is provenance, not
+interpretation. Stdlib only. Re-reads the env file every cycle so a key added later is picked
+up without a restart. Each source is isolated: one failing source cannot stall another, and the
 schedule survives restarts so a crash cannot turn into a refire loop.
 
-Do not run `--once` while the service is running: budget.json and
-schedule.json are single-writer files.
+TomTom was removed 2026-09-16 after reading its developer T&C — §11.4 prohibits storing Results,
+which is the whole job of this program. See ADR-0001 and docs/research/samples/README.md §4.
+
+Do not run `--once` while the service is running: schedule.json is a single-writer file.
 """
 import gzip
 import hashlib
 import http.client
 import json
-import math
 import os
 import shutil
 import signal
@@ -27,52 +27,33 @@ import urllib.request
 from datetime import datetime, timezone
 
 ENV_FILE = os.environ.get("PDXTM_ENV_FILE", "/home/claude/.config/pdxtrafficmonster/env")
-USER_AGENT = "PDXTrafficMonster-collector/0.8 (+https://github.com/colinwinslow/PDXTrafficMonster)"
+USER_AGENT = "PDXTrafficMonster-collector/1.0 (+https://github.com/colinwinslow/PDXTrafficMonster)"
 TRIMET_VP_URL = "https://developer.trimet.org/ws/V1/VehiclePositions"
 TRIMET_GTFS_URL = "https://developer.trimet.org/schedule/gtfs.zip"
-TOMTOM_TILE_URL = "https://api.tomtom.com/traffic/map/4/tile/flow/{style}/{z}/{x}/{y}.pbf"
-TOMTOM_SEG_URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/{zoom}/json"
-KEY_PARAMS = ("appID", "key")
-SECRET_VARS = ("TRIMET_APP_ID", "TOMTOM_API_KEY")
+KEY_PARAMS = ("appID",)
+SECRET_VARS = ("TRIMET_APP_ID",)
 MIN_FREE_BYTES = 1 << 30
 ERROR_BODY_LIMIT = 2000  # how much of an HTTP error body is worth keeping for diagnosis
 TICK_SECONDS = 5
 CHUNK = 1 << 20
-SOURCES = ("trimet", "trimet_static", "tomtom_tiles", "tomtom_segments")
+SOURCES = ("trimet", "trimet_static")
 # How long a source sleeps after an unexpected exception (not an HTTP error) before retrying.
-ERROR_DEFER = {"trimet": 300, "trimet_static": 6 * 3600, "tomtom_tiles": 300, "tomtom_segments": 1200}
+ERROR_DEFER = {"trimet": 300, "trimet_static": 6 * 3600}
 # Hard wall-clock ceilings per request; the watchdog is fed per chunk inside these.
-DEADLINE = {"trimet": 60, "trimet_static": 900, "tomtom_tiles": 60, "tomtom_segments": 60}
+DEADLINE = {"trimet": 60, "trimet_static": 900}
 # Largest legitimate backoff multiplier per source. Single source of truth: the handlers cap
 # their backoff with this AND load_schedule clamps a restored epoch with it. If these drift
-# apart the clamp starts shortening legitimate defers, i.e. it becomes a spend amplifier.
-MAX_BACKOFF = {"trimet": 16, "trimet_static": 1, "tomtom_tiles": 8, "tomtom_segments": 8}
+# apart the clamp starts shortening legitimate defers.
+MAX_BACKOFF = {"trimet": 16, "trimet_static": 1}
 INTERVAL_VAR = {
     "trimet": "PDXTM_TRIMET_INTERVAL",
     "trimet_static": "PDXTM_TRIMET_STATIC_INTERVAL",
-    "tomtom_tiles": "PDXTM_TOMTOM_TILE_INTERVAL",
-    "tomtom_segments": "PDXTM_TOMTOM_SEGMENT_INTERVAL",
 }
 
 DEFAULTS = {
     "PDXTM_DATA_DIR": "/home/claude/data/pdxtrafficmonster",
     "PDXTM_TRIMET_INTERVAL": "30",
     "PDXTM_TRIMET_STATIC_INTERVAL": str(7 * 24 * 3600),
-    # TomTom stays off until the developer T&C on storing/redistributing responses has been
-    # read (ADR-0001 "Open", ADR-0003); flip to 1 in the env file to enable.
-    "PDXTM_TOMTOM_ENABLED": "0",
-    "PDXTM_TOMTOM_TILE_INTERVAL": "300",
-    "PDXTM_TOMTOM_TILE_ZOOM": "14",
-    "PDXTM_TOMTOM_TILE_STYLES": "absolute",
-    "PDXTM_TOMTOM_BBOX": "45.52,-122.70,45.58,-122.64",
-    "PDXTM_TOMTOM_TILE_DAILY_CAP": "5500",
-    "PDXTM_TOMTOM_SEGMENT_INTERVAL": "1200",
-    "PDXTM_TOMTOM_SEGMENT_ZOOM": "12",
-    # MLK@Broadway, MLK@Fremont, Interstate@Russell, Interstate@Going (OSM way midpoints),
-    # then PORTAL stations 3121 (SB I-5 @ Broadway) and 3169 (NB) as loop-vs-probe cross-checks.
-    "PDXTM_TOMTOM_POINTS": "45.535178,-122.66166;45.548648,-122.66152;45.540596,-122.67705;45.552799,-122.680888;"
-                           "45.53675,-122.668429;45.536814,-122.66827",
-    "PDXTM_TOMTOM_SEGMENT_DAILY_CAP": "600",
 }
 
 
@@ -129,72 +110,10 @@ def redact(url):
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(q)))
 
 
-def lonlat_to_tile(lon, lat, z):
-    n = 2 ** z
-    x = int((lon + 180.0) / 360.0 * n)
-    lat_r = math.radians(lat)
-    y = int((1.0 - math.log(math.tan(lat_r) + 1.0 / math.cos(lat_r)) / math.pi) / 2.0 * n)
-    return x, y
-
-
-def tile_range(bbox, z):
-    """bbox = 'south,west,north,east' -> sorted list of (x, y) tiles covering it."""
-    s, w, n, e = (float(v) for v in bbox.split(","))
-    x0, y0 = lonlat_to_tile(w, n, z)
-    x1, y1 = lonlat_to_tile(e, s, z)
-    return [(x, y) for x in range(min(x0, x1), max(x0, x1) + 1) for y in range(min(y0, y1), max(y0, y1) + 1)]
-
-
-def parse_points(text):
-    pts = []
-    for item in text.split(";"):
-        item = item.strip()
-        if not item:
-            continue
-        lat, lon = (float(v) for v in item.split(","))
-        pts.append((lat, lon))
-    return pts
-
-
 def snapshot_path(data_dir, source, name, ext, now, compress=True):
     day = now.strftime("%Y-%m-%d")
     stamp = now.strftime("%H%M%SZ")
     return os.path.join(data_dir, source, day, f"{stamp}_{name}.{ext}" + (".gz" if compress else ""))
-
-
-class BudgetGuard:
-    """Per-source, per-UTC-day request counter persisted to disk.
-
-    Only the TomTom sources are budgeted, deliberately: they draw on a metered monthly free
-    tier that a bug could exhaust, whereas TriMet publishes no request quota and its own
-    fixed intervals bound its call rate. If TriMet ever publishes a quota, budget it too.
-    """
-
-    def __init__(self, path):
-        self.path = path
-        self.state = {}
-        try:
-            with open(path) as f:
-                loaded = json.load(f)
-            if isinstance(loaded, dict):
-                self.state = {k: v for k, v in loaded.items() if isinstance(v, int)}
-        except (FileNotFoundError, ValueError, OSError):
-            pass
-
-    def _key(self, source, now):
-        return f"{source}:{now.strftime('%Y-%m-%d')}"
-
-    def remaining(self, source, cap, now):
-        return cap - self.state.get(self._key(source, now), 0)
-
-    def spend(self, source, n, now):
-        k = self._key(source, now)
-        self.state[k] = self.state.get(k, 0) + n
-        self.state = {k2: v for k2, v in self.state.items() if k2.endswith(now.strftime("%Y-%m-%d"))}
-        tmp = self.path + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(self.state, f)
-        os.replace(tmp, self.path)
 
 
 def _read_guarded(r, deadline, pet, clock, start, limit=None):
@@ -246,7 +165,7 @@ def fetch(url, timeout=20, deadline=None, pet=None, clock=time.monotonic):
         # The error body gets the SAME treatment as the success body, deliberately: it can raise
         # IncompleteRead (raising here escapes fetch(), losing the manifest line and the backoff
         # ladder), and it can dribble (a plain e.read() is one blocking whole-body read, so it
-        # honours no deadline and pets the watchdog zero times — stalling all four sources until
+        # honours no deadline and pets the watchdog zero times — stalling every source until
         # SIGABRT). Either way the HTTP status is still reported, because that is the fact the
         # manifest needs.
         try:
@@ -396,7 +315,7 @@ class Collector:
 
     # ---- sources -------------------------------------------------------------------------
 
-    def _trimet(self, cfg, budget, now):
+    def _trimet(self, cfg, now):
         interval = float(cfg["PDXTM_TRIMET_INTERVAL"])
         app_id = cfg.get("TRIMET_APP_ID", "")
         if not app_id:
@@ -412,7 +331,7 @@ class Collector:
         self._defer("trimet", interval * self.backoff["trimet"])
         return (status, len(body))
 
-    def _trimet_static(self, cfg, budget, now):
+    def _trimet_static(self, cfg, now):
         interval = float(cfg["PDXTM_TRIMET_STATIC_INTERVAL"])
         self._defer("trimet_static", interval)
         # Persist before the fetch: a kill inside the (up to DEADLINE) download window must not
@@ -424,87 +343,9 @@ class Collector:
             self._defer("trimet_static", ERROR_DEFER["trimet_static"])
         return (status, len(body))
 
-    def _tomtom_gate(self, cfg):
-        key = cfg.get("TOMTOM_API_KEY", "")
-        if not key:
-            self.warn_hourly("tomtom_key", f"tomtom: no TOMTOM_API_KEY in {ENV_FILE}; waiting")
-            return None
-        if cfg.get("PDXTM_TOMTOM_ENABLED", "0") != "1":
-            self.warn_hourly("tomtom_gate", "tomtom: key present but PDXTM_TOMTOM_ENABLED != 1; "
-                                            "read the developer T&C (ADR-0001 Open) then set it to 1")
-            return None
-        return key
-
-    def _tomtom_tiles(self, cfg, budget, now):
-        interval = float(cfg["PDXTM_TOMTOM_TILE_INTERVAL"])
-        key = self._tomtom_gate(cfg)
-        if not key:
-            self._defer("tomtom_tiles", 60)
-            return None
-        z = int(cfg["PDXTM_TOMTOM_TILE_ZOOM"])
-        tiles = tile_range(cfg["PDXTM_TOMTOM_BBOX"], z)
-        styles = [s.strip() for s in cfg["PDXTM_TOMTOM_TILE_STYLES"].split(",") if s.strip()]
-        need = len(tiles) * len(styles)
-        cap = int(cfg["PDXTM_TOMTOM_TILE_DAILY_CAP"])
-        if budget.remaining("tomtom_tiles", cap, now) < need:
-            self.warn_hourly("tiles_cap", f"tomtom_tiles: daily cap {cap} reached; skipping until tomorrow (UTC)")
-            self._defer("tomtom_tiles", 600)
-            return None
-        # Charge, reschedule, and persist BEFORE fetching: neither an exception mid-loop nor a
-        # restart mid-loop may lead to a free retry.
-        budget.spend("tomtom_tiles", need, now)
-        self._defer("tomtom_tiles", interval * self.backoff["tomtom_tiles"])
-        self.save_schedule(cfg["PDXTM_DATA_DIR"])
-        n_ok = 0
-        rate_limited = False
-        for style in styles:
-            if rate_limited:
-                break  # a 429 must abandon the whole cycle, not just the current style's tiles
-            for x, y in tiles:
-                url = TOMTOM_TILE_URL.format(style=style, z=z, x=x, y=y) + "?" + urllib.parse.urlencode({"key": key})
-                status, ctype, body = self._fetch("tomtom_tiles", url)
-                ok, _ = store(cfg["PDXTM_DATA_DIR"], "tomtom_tiles", f"{style}_z{z}_{x}_{y}", "pbf", url, status, ctype, body, now)
-                n_ok += ok
-                if status == 429:
-                    rate_limited = True
-                    break
-        self.backoff["tomtom_tiles"] = 1 if n_ok == need else min(self.backoff["tomtom_tiles"] * 2, MAX_BACKOFF["tomtom_tiles"])
-        self._defer("tomtom_tiles", interval * self.backoff["tomtom_tiles"])
-        return (n_ok, need)
-
-    def _tomtom_segments(self, cfg, budget, now):
-        interval = float(cfg["PDXTM_TOMTOM_SEGMENT_INTERVAL"])
-        key = self._tomtom_gate(cfg)
-        points = parse_points(cfg["PDXTM_TOMTOM_POINTS"])
-        if not key or not points:
-            if key and not points:
-                self.warn_hourly("points", "tomtom_segments: PDXTM_TOMTOM_POINTS empty; skipping")
-            self._defer("tomtom_segments", 60)
-            return None
-        cap = int(cfg["PDXTM_TOMTOM_SEGMENT_DAILY_CAP"])
-        if budget.remaining("tomtom_segments", cap, now) < len(points):
-            self.warn_hourly("seg_cap", f"tomtom_segments: daily cap {cap} reached; skipping until tomorrow (UTC)")
-            self._defer("tomtom_segments", 600)
-            return None
-        budget.spend("tomtom_segments", len(points), now)
-        self._defer("tomtom_segments", interval * self.backoff["tomtom_segments"])
-        self.save_schedule(cfg["PDXTM_DATA_DIR"])
-        n_ok = 0
-        for i, (lat, lon) in enumerate(points):
-            url = TOMTOM_SEG_URL.format(zoom=cfg["PDXTM_TOMTOM_SEGMENT_ZOOM"]) + "?" + urllib.parse.urlencode(
-                {"key": key, "point": f"{lat},{lon}", "unit": "MPH"})
-            status, ctype, body = self._fetch("tomtom_segments", url)
-            ok, _ = store(cfg["PDXTM_DATA_DIR"], "tomtom_segments", f"p{i:02d}_{lat}_{lon}", "json", url, status, ctype, body, now)
-            n_ok += ok
-            if status == 429:
-                break
-        self.backoff["tomtom_segments"] = 1 if n_ok == len(points) else min(self.backoff["tomtom_segments"] * 2, MAX_BACKOFF["tomtom_segments"])
-        self._defer("tomtom_segments", interval * self.backoff["tomtom_segments"])
-        return (n_ok, len(points))
-
     # ---- cycle ---------------------------------------------------------------------------
 
-    def run_once(self, cfg, budget, now):
+    def run_once(self, cfg, now):
         self.secrets = secrets_of(cfg)
         data_dir = cfg["PDXTM_DATA_DIR"]
         if not self.schedule_loaded:
@@ -517,20 +358,15 @@ class Collector:
         if free < MIN_FREE_BYTES:
             self.warn_hourly("disk", f"disk: {free} bytes free under {MIN_FREE_BYTES}; not fetching")
             return results
-        handlers = {
-            "trimet": self._trimet,
-            "trimet_static": self._trimet_static,
-            "tomtom_tiles": self._tomtom_tiles,
-            "tomtom_segments": self._tomtom_segments,
-        }
+        handlers = {"trimet": self._trimet, "trimet_static": self._trimet_static}
         for source, handler in handlers.items():
             if self.clock() < self.next_due[source]:
                 continue
             try:
-                r = handler(cfg, budget, now)
+                r = handler(cfg, now)
                 if r is not None:
                     results[source] = r
-            except Exception as e:  # isolate: one broken source must not stall or free-retry the others
+            except Exception as e:  # isolate: one broken source must not stall or free-retry the other
                 self._defer(source, ERROR_DEFER[source])
                 log(scrub(f"{source}: cycle error {type(e).__name__}: {e}; deferring {ERROR_DEFER[source]}s", self.secrets))
         return results
@@ -547,7 +383,6 @@ class Collector:
             "env_file": ENV_FILE,
             "env_error": env_error,
             "keys_present": {k: bool(cfg.get(k)) for k in SECRET_VARS},
-            "tomtom_enabled": cfg.get("PDXTM_TOMTOM_ENABLED", "0") == "1",
             "disk_free_bytes": free,
             # Stamped: last_results is sticky (it holds the last NON-empty cycle), so without a
             # timestamp a reader cannot tell a 2-second-old success from a 6-day-old one.
@@ -568,8 +403,7 @@ class Collector:
         now = datetime.now(timezone.utc)
         try:
             os.makedirs(cfg["PDXTM_DATA_DIR"], exist_ok=True)
-            budget = BudgetGuard(os.path.join(cfg["PDXTM_DATA_DIR"], "budget.json"))
-            r = self.run_once(cfg, budget, now)
+            r = self.run_once(cfg, now)
             if r:
                 last_results = r
                 self.last_results_at = now.isoformat()
@@ -602,7 +436,6 @@ class Collector:
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--once":
-        c = Collector()
-        print(json.dumps(c.cycle({})))
+        print(json.dumps(Collector().cycle({})))
     else:
         Collector().run()

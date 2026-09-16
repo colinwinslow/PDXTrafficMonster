@@ -1,5 +1,5 @@
 [Unit]
-Description=PDXTrafficMonster live collector (TriMet GTFS-RT/static + TomTom flow)
+Description=PDXTrafficMonster live collector (TriMet GTFS-RT + static GTFS)
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0

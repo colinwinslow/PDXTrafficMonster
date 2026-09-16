@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import collect_live as cl  # noqa: E402
 
 NOW = datetime(2026, 9, 15, 1, 2, 3, tzinfo=timezone.utc)
-KEYED = dict(TRIMET_APP_ID="TSECRET123", TOMTOM_API_KEY="KSECRET123", PDXTM_TOMTOM_ENABLED="1",
-             PDXTM_TOMTOM_POINTS="45.53,-122.66")
+KEYED = dict(TRIMET_APP_ID="TSECRET123")
+WALL = 1_700_000_000.0
 
 
 def read(path):
@@ -42,67 +42,9 @@ def fake_fetch(calls, status=200):
 
 
 def make(clock=None, pets=None):
-    return cl.Collector(clock=clock or FakeClock(), pet=(lambda: pets.append(1)) if pets is not None else (lambda: None),
-                        wall=lambda: 1_700_000_000.0)
-
-
-class TestPureHelpers(unittest.TestCase):
-    def test_parse_env_handles_comments_quotes_and_blank(self):
-        text = "# comment\n\nTRIMET_APP_ID='abc123'\nTOMTOM_API_KEY=\"k\"\nPDXTM_X = 5 \nBAD LINE\n"
-        self.assertEqual(cl.parse_env(text), {"TRIMET_APP_ID": "abc123", "TOMTOM_API_KEY": "k", "PDXTM_X": "5"})
-
-    def test_redact_strips_both_key_params_and_keeps_others(self):
-        r = cl.redact("https://x/y?appID=SECRET1&point=1,2&key=SECRET2")
-        self.assertNotIn("SECRET", r)
-        self.assertIn("point=1%2C2", r)
-        self.assertIn("appID=REDACTED", r)
-        self.assertIn("key=REDACTED", r)
-
-    def test_scrub_removes_secret_values_including_percent_encoded_forms(self):
-        secrets = cl.secrets_of({"TRIMET_APP_ID": "TS+CRET/123", "TOMTOM_API_KEY": "short"})
-        self.assertIn("TS+CRET/123", secrets)
-        self.assertIn(urllib.parse.quote("TS+CRET/123", safe=""), secrets)
-        self.assertIn(urllib.parse.quote_plus("TS+CRET/123"), secrets)
-        msg = "ValueError: unknown url type: 'x?appID=" + urllib.parse.quote_plus("TS+CRET/123") + "' raw TS+CRET/123"
-        self.assertEqual(cl.scrub(msg, secrets), "ValueError: unknown url type: 'x?appID=REDACTED' raw REDACTED")
-
-    def test_tile_contains_its_point(self):
-        import math
-        lon, lat, z = -122.6668, 45.5316, 14
-        x, y = cl.lonlat_to_tile(lon, lat, z)
-        n = 2 ** z
-        west, east = x / n * 360.0 - 180.0, (x + 1) / n * 360.0 - 180.0
-        north = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
-        south = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n))))
-        self.assertTrue(west <= lon < east)
-        self.assertTrue(south <= lat < north)
-        self.assertEqual((x, y), (2609, 5859))  # hand-derived: (57.3332/360)*16384 = 2609.3
-
-    def test_default_tile_budget_fits_monthly_quota_and_watchdog(self):
-        tiles = cl.tile_range(cl.DEFAULTS["PDXTM_TOMTOM_BBOX"], int(cl.DEFAULTS["PDXTM_TOMTOM_TILE_ZOOM"]))
-        self.assertEqual(len(tiles), 20)
-        per_day = min(len(tiles) * (86400 // int(cl.DEFAULTS["PDXTM_TOMTOM_TILE_INTERVAL"])),
-                      int(cl.DEFAULTS["PDXTM_TOMTOM_TILE_DAILY_CAP"]))
-        self.assertLess(per_day * 31, 200_000)
-        pts = len(cl.parse_points(cl.DEFAULTS["PDXTM_TOMTOM_POINTS"]))
-        seg_per_day = min(pts * (86400 // int(cl.DEFAULTS["PDXTM_TOMTOM_SEGMENT_INTERVAL"])),
-                          int(cl.DEFAULTS["PDXTM_TOMTOM_SEGMENT_DAILY_CAP"]))
-        self.assertLess(seg_per_day * 31, 20_000)
-        # The watchdog is fed per fetch, so the window only needs to exceed ONE request's ceiling.
-        unit = read(os.path.join(os.path.dirname(__file__), "..", "scripts", "systemd", "pdxtrafficmonster-collector.service"))
-        watchdog = int([l for l in unit.splitlines() if l.startswith("WatchdogSec=")][0].split("=")[1])
-        self.assertGreater(watchdog, max(cl.DEADLINE.values()))
-
-    def test_parse_points(self):
-        self.assertEqual(cl.parse_points("45.5,-122.6; 45.6,-122.7;"), [(45.5, -122.6), (45.6, -122.7)])
-        self.assertEqual(cl.parse_points(""), [])
-
-    def test_snapshot_path_is_utc_day_partitioned(self):
-        now = datetime(2026, 9, 15, 23, 59, 40, tzinfo=timezone.utc)
-        self.assertEqual(cl.snapshot_path("/d", "trimet", "vehiclepositions", "pb", now),
-                         "/d/trimet/2026-09-15/235940Z_vehiclepositions.pb.gz")
-        self.assertEqual(cl.snapshot_path("/d", "trimet_static", "gtfs", "zip", now, compress=False),
-                         "/d/trimet_static/2026-09-15/235940Z_gtfs.zip")
+    return cl.Collector(clock=clock or FakeClock(),
+                        pet=(lambda: pets.append(1)) if pets is not None else (lambda: None),
+                        wall=lambda: WALL)
 
 
 class Resp:
@@ -131,41 +73,6 @@ class Resp:
 
     def __exit__(self, *a):
         return False
-
-
-class TestFetch(unittest.TestCase):
-    def setUp(self):
-        self.orig = cl.urllib.request.urlopen
-
-    def tearDown(self):
-        cl.urllib.request.urlopen = self.orig
-
-    def test_uses_read1_so_the_pet_fires_per_recv_not_per_body(self):
-        # read() would hand back all 12 bytes in one call (one pet); read1 yields 3 at a time.
-        cl.urllib.request.urlopen = lambda req, timeout=20: Resp(b"x" * 12, per_recv=3)
-        pets = []
-        st, ct, body = cl.fetch("https://x", pet=lambda: pets.append(1))
-        self.assertEqual((st, body), (200, b"x" * 12))
-        self.assertEqual(len(pets), 4, "expected one pet per recv-sized chunk, not one per body")
-
-    def test_deadline_aborts_without_storing_a_partial_body(self):
-        clock = FakeClock()
-
-        def ticking():
-            clock.t += 100
-            return clock.t
-        cl.urllib.request.urlopen = lambda req, timeout=20: Resp(b"x" * 12, per_recv=3)
-        st, ct, body = cl.fetch("https://x", deadline=150, clock=ticking)
-        self.assertEqual((st, ct, body), (0, "DeadlineExceeded", b""))
-
-    def test_raised_incomplete_read_is_caught_chunked_case(self):
-        # For a CHUNKED body http.client does raise IncompleteRead. It is an HTTPException, not an
-        # OSError, so it needs its own except clause or it escapes fetch and never reaches the
-        # manifest. (The Content-Length case does NOT raise — see TestRealSocketTruncation.)
-        self.assertFalse(issubclass(cl.http.client.IncompleteRead, (OSError, ValueError)))
-        cl.urllib.request.urlopen = lambda req, timeout=20: Resp(b"x" * 12, raise_incomplete=True)
-        st, ct, body = cl.fetch("https://x")
-        self.assertEqual((st, ct, body), (0, "IncompleteRead", b""))
 
 
 class TrickleServer:
@@ -205,6 +112,77 @@ class TrickleServer:
         self.sock.close()
 
 
+class TestPureHelpers(unittest.TestCase):
+    def test_parse_env_handles_comments_quotes_and_blank(self):
+        text = "# comment\n\nTRIMET_APP_ID='abc123'\nPDXTM_X = 5 \nBAD LINE\n"
+        self.assertEqual(cl.parse_env(text), {"TRIMET_APP_ID": "abc123", "PDXTM_X": "5"})
+
+    def test_redact_strips_the_key_param_and_keeps_others(self):
+        r = cl.redact("https://x/y?appID=SECRET1&point=1,2")
+        self.assertNotIn("SECRET", r)
+        self.assertIn("point=1%2C2", r)
+        self.assertIn("appID=REDACTED", r)
+
+    def test_scrub_removes_secret_values_including_percent_encoded_forms(self):
+        secrets = cl.secrets_of({"TRIMET_APP_ID": "TS+CRET/123"})
+        self.assertIn("TS+CRET/123", secrets)
+        self.assertIn(urllib.parse.quote("TS+CRET/123", safe=""), secrets)
+        self.assertIn(urllib.parse.quote_plus("TS+CRET/123"), secrets)
+        msg = "ValueError: unknown url type: 'x?appID=" + urllib.parse.quote_plus("TS+CRET/123") + "' raw TS+CRET/123"
+        self.assertEqual(cl.scrub(msg, secrets), "ValueError: unknown url type: 'x?appID=REDACTED' raw REDACTED")
+
+    def test_short_secrets_are_not_scrubbed(self):  # avoids masking common words
+        self.assertEqual(cl.secrets_of({"TRIMET_APP_ID": "abc"}), [])
+
+    def test_snapshot_path_is_utc_day_partitioned(self):
+        now = datetime(2026, 9, 15, 23, 59, 40, tzinfo=timezone.utc)
+        self.assertEqual(cl.snapshot_path("/d", "trimet", "vehiclepositions", "pb", now),
+                         "/d/trimet/2026-09-15/235940Z_vehiclepositions.pb.gz")
+        self.assertEqual(cl.snapshot_path("/d", "trimet_static", "gtfs", "zip", now, compress=False),
+                         "/d/trimet_static/2026-09-15/235940Z_gtfs.zip")
+
+    def test_no_tomtom_reference_survives(self):
+        # TomTom is licence-incompatible with this project (ADR-0001). Dead code behind a flag
+        # would be an invitation to re-enable it, so this pins the removal.
+        src = read(os.path.join(os.path.dirname(__file__), "..", "scripts", "collect_live.py")).lower()
+        body = src.split('"""', 2)[2]  # the module docstring explains WHY it is gone; that stays
+        self.assertNotIn("tomtom", body)
+
+
+class TestFetch(unittest.TestCase):
+    def setUp(self):
+        self.orig = cl.urllib.request.urlopen
+
+    def tearDown(self):
+        cl.urllib.request.urlopen = self.orig
+
+    def test_uses_read1_so_the_pet_fires_per_recv_not_per_body(self):
+        cl.urllib.request.urlopen = lambda req, timeout=20: Resp(b"x" * 12, per_recv=3)
+        pets = []
+        st, ct, body = cl.fetch("https://x", pet=lambda: pets.append(1))
+        self.assertEqual((st, body), (200, b"x" * 12))
+        self.assertEqual(len(pets), 4, "expected one pet per recv-sized chunk, not one per body")
+
+    def test_deadline_aborts_without_storing_a_partial_body(self):
+        clock = FakeClock()
+
+        def ticking():
+            clock.t += 100
+            return clock.t
+        cl.urllib.request.urlopen = lambda req, timeout=20: Resp(b"x" * 12, per_recv=3)
+        st, ct, body = cl.fetch("https://x", deadline=150, clock=ticking)
+        self.assertEqual((st, ct, body), (0, "DeadlineExceeded", b""))
+
+    def test_raised_incomplete_read_is_caught_chunked_case(self):
+        # For a CHUNKED body http.client does raise IncompleteRead. It is an HTTPException, not an
+        # OSError, so it needs its own except clause or it escapes fetch and never reaches the
+        # manifest. (The Content-Length case does NOT raise — see TestRealSocketTruncation.)
+        self.assertFalse(issubclass(cl.http.client.IncompleteRead, (OSError, ValueError)))
+        cl.urllib.request.urlopen = lambda req, timeout=20: Resp(b"x" * 12, raise_incomplete=True)
+        st, ct, body = cl.fetch("https://x")
+        self.assertEqual((st, ct, body), (0, "IncompleteRead", b""))
+
+
 class TestRealSocketTruncation(unittest.TestCase):
     """read1() does NOT raise IncompleteRead on a Content-Length body — it returns b"".
     These go through real http.client, because a hand-written fake response cannot show that."""
@@ -224,7 +202,11 @@ class TestRealSocketTruncation(unittest.TestCase):
         self.assertEqual(ct, "application/zip")
 
     def test_multi_chunk_body_pets_more_than_once(self):
-        srv = TrickleServer(declared=40000, actual=40000, chunk=8192)
+        # The delay is load-bearing, not politeness. Without it the whole body can already be in
+        # the socket buffer when we read, and read1() is then entitled to return all of it in one
+        # call — so this asserted a coalescing behaviour the OS never promised and failed under
+        # CPU load. Spacing the writes forces genuinely separate recvs.
+        srv = TrickleServer(declared=40000, actual=40000, chunk=8192, delay=0.02)
         self.addCleanup(srv.close)
         pets = []
         st, _, body = cl.fetch(srv.url, pet=lambda: pets.append(1))
@@ -232,22 +214,17 @@ class TestRealSocketTruncation(unittest.TestCase):
         self.assertGreater(len(pets), 1, "read1 should yield several recv-sized chunks")
 
     def test_truncated_error_body_still_yields_its_status_not_an_escape(self):
-        # e.read() on a short error body raises IncompleteRead INSIDE the except HTTPError block,
-        # which is not covered by the general handler. If it escapes fetch(), the source loses
-        # both its manifest line and its backoff ladder while the process looks healthy.
         srv = TrickleServer(declared=5000, actual=50, status=b"503 Service Unavailable")
         self.addCleanup(srv.close)
         st, ct, body = cl.fetch(srv.url)
         self.assertEqual(st, 503, "a truncated error body must still report its HTTP status")
 
     def test_dribbling_error_body_honours_the_deadline_and_pets_the_watchdog(self):
-        # A plain e.read() is one blocking whole-body read: it would return only after the whole
-        # 5 kB dribbled in (~50 s), honouring no deadline and petting zero times, stalling every
-        # source until SIGABRT. The error body must get the same guarded read as a success body.
-        # The deadline must bind BEFORE ERROR_BODY_LIMIT does, or this asserts nothing: reaching
-        # the 2000-byte cap here takes ~2.0s, so a 0.5s deadline is the only thing that can end
-        # the read early. (Round 7 added the cap and silently hollowed out this exact test.)
-        srv = TrickleServer(declared=5000, actual=5000, chunk=50, status=b"503 Service Unavailable", delay=0.05)
+        # The deadline must bind BEFORE ERROR_BODY_LIMIT does, or this asserts nothing. At
+        # 50 bytes per 0.2s the 2000-byte cap is ~8s away, so a 0.5s deadline is the only thing
+        # that can end the read early — and the wide gap keeps the timing assertion honest under
+        # CPU load. (Adding the cap once silently hollowed out this exact test.)
+        srv = TrickleServer(declared=5000, actual=5000, chunk=50, status=b"503 Service Unavailable", delay=0.2)
         self.addCleanup(srv.close)
         pets = []
         t0 = time.monotonic()
@@ -256,7 +233,7 @@ class TestRealSocketTruncation(unittest.TestCase):
         self.assertEqual(st, 503, "the HTTP status must still reach the manifest")
         self.assertLess(len(body), cl.ERROR_BODY_LIMIT,
                         "the cap, not the deadline, ended this read — the test would prove nothing")
-        self.assertLess(elapsed, 1.5, f"deadline not honoured on the error body ({elapsed:.1f}s)")
+        self.assertLess(elapsed, 3.0, f"deadline not honoured on the error body ({elapsed:.1f}s)")
         self.assertGreater(len(pets), 0, "watchdog never petted while reading the error body")
 
     def test_erroring_static_source_records_a_manifest_line_and_defers_for_hours(self):
@@ -270,7 +247,7 @@ class TestRealSocketTruncation(unittest.TestCase):
             cl.TRIMET_GTFS_URL = srv.url
             try:
                 c = make()
-                r = c.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+                r = c.run_once(cfg, NOW)
             finally:
                 cl.TRIMET_GTFS_URL = orig
             self.assertEqual(r["trimet_static"][0], 403)
@@ -289,7 +266,7 @@ class TestRealSocketTruncation(unittest.TestCase):
             cl.TRIMET_GTFS_URL = srv.url
             try:
                 c = make()
-                r = c.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+                r = c.run_once(cfg, NOW)
             finally:
                 cl.TRIMET_GTFS_URL = orig
             self.assertEqual(r["trimet_static"], (0, 0))
@@ -330,12 +307,15 @@ class TestReadGuarded(unittest.TestCase):
 
 
 class TestSchedule(unittest.TestCase):
-    WALL = 1_700_000_000.0
+    URL_IS = {
+        "trimet": lambda u: "VehiclePositions" in u,
+        "trimet_static": lambda u: u == cl.TRIMET_GTFS_URL,
+    }
 
     def _loaded(self, d, epochs, cfg):
         with open(os.path.join(d, "schedule.json"), "w") as f:
             json.dump(epochs, f)
-        c = cl.Collector(clock=FakeClock(), pet=lambda: None, wall=lambda: self.WALL)
+        c = make()
         c.load_schedule(cfg)
         return c
 
@@ -344,15 +324,22 @@ class TestSchedule(unittest.TestCase):
         # that ignored schedule.json entirely satisfied vacuously (next_due stays 0.0).
         with tempfile.TemporaryDirectory() as d:
             cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
-            c = self._loaded(d, {s: self.WALL + 137 for s in cl.SOURCES}, cfg)
+            c = self._loaded(d, {s: WALL + 137 for s in cl.SOURCES}, cfg)
             for s in cl.SOURCES:
                 self.assertAlmostEqual(c.next_due[s] - c.clock(), 137, delta=0.01,
                                        msg=f"{s} did not restore its persisted wait")
 
+    def test_legacy_flat_layout_is_still_read(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
+            c = self._loaded(d, {s: WALL + 90 for s in cl.SOURCES}, cfg)  # flat, no "next_due" key
+            for s in cl.SOURCES:
+                self.assertAlmostEqual(c.next_due[s] - c.clock(), 90, delta=0.01)
+
     def test_future_epoch_is_clamped_to_exactly_the_sources_max_defer(self):
         with tempfile.TemporaryDirectory() as d:
             cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
-            c = self._loaded(d, {s: self.WALL + 365 * 86400 for s in cl.SOURCES}, cfg)
+            c = self._loaded(d, {s: WALL + 365 * 86400 for s in cl.SOURCES}, cfg)
             for s in cl.SOURCES:
                 self.assertAlmostEqual(c.next_due[s] - c.clock(), c.max_defer(s, cfg), delta=0.01,
                                        msg=f"{s} was not clamped to its max legitimate wait")
@@ -360,86 +347,45 @@ class TestSchedule(unittest.TestCase):
     def test_past_epoch_makes_a_source_due_immediately(self):
         with tempfile.TemporaryDirectory() as d:
             cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
-            c = self._loaded(d, {s: self.WALL - 99999 for s in cl.SOURCES}, cfg)
+            c = self._loaded(d, {s: WALL - 99999 for s in cl.SOURCES}, cfg)
             for s in cl.SOURCES:
                 self.assertAlmostEqual(c.next_due[s] - c.clock(), 0.0, delta=0.01)
 
-    def test_clamp_never_shortens_a_legitimate_maximal_defer(self):
-        # If max_defer < interval * MAX_BACKOFF, load_schedule would pull a correctly-backed-off
-        # source forward on restart — the clamp turning into a spend amplifier.
+    def test_corrupt_schedule_file_does_not_crash(self):
+        # Sibling of the budget test that used to exist for the other file. Honest limit: a
+        # corrupt schedule silently zeroes every next_due, so the next cycle re-pulls the
+        # 29.5 MB gtfs.zip. Only reachable via external corruption (save_schedule is tmp+replace).
         with tempfile.TemporaryDirectory() as d:
             cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
-            c = cl.Collector(clock=FakeClock(), pet=lambda: None, wall=lambda: self.WALL)
+            path = os.path.join(d, "schedule.json")
+            for bad in ('{"next_due": null}', '{"backoff": "x"}', '{"next_due": {"trimet": "soon"}}',
+                        '[1,2]', 'not json', '{"next_due": {"trimet": 1.7e9}, "backoff": {"trimet": 99}}'):
+                with open(path, "w") as f:
+                    f.write(bad)
+                c = make()
+                c.load_schedule(cfg)  # must not raise
+                for s in cl.SOURCES:
+                    self.assertTrue(1 <= c.backoff[s] <= cl.MAX_BACKOFF[s],
+                                    f"{bad}: {s} restored an out-of-range backoff {c.backoff[s]}")
+
+    def test_clamp_never_shortens_a_legitimate_maximal_defer(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
+            c = make()
             for s in cl.SOURCES:
                 interval = float(cfg[cl.INTERVAL_VAR[s]])
                 self.assertGreaterEqual(c.max_defer(s, cfg) + 0.01, interval * cl.MAX_BACKOFF[s],
                                         f"{s}: clamp is tighter than its own maximal backoff")
 
-
-class TestBackoffLadder(unittest.TestCase):
-    """Behavioural, not a source grep: drive real failures until the ladder saturates."""
-
-    def setUp(self):
-        self.orig_fetch = cl.fetch
-
-    def tearDown(self):
-        cl.fetch = self.orig_fetch
-
-    def _saturate(self, cfg, source, cycles=12):
-        with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cfg, PDXTM_DATA_DIR=d)
-            clock = FakeClock()
-            c = cl.Collector(clock=clock, pet=lambda: None, wall=lambda: 1_700_000_000.0)
-            budget = cl.BudgetGuard(os.path.join(d, "budget.json"))
-            cl.fetch = fake_fetch([], status=500)
-            seen = []
-            for _ in range(cycles):
-                c.run_once(cfg, budget, NOW)
-                seen.append(c.backoff[source])
-                clock.t += 10_000_000  # always due again
-            return seen
-
-    def test_trimet_backoff_saturates_at_the_table_value(self):
-        seen = self._saturate(dict(cl.DEFAULTS, TRIMET_APP_ID="TSECRET123",
-                                   PDXTM_TRIMET_STATIC_INTERVAL="999999999"), "trimet")
-        self.assertEqual(max(seen), cl.MAX_BACKOFF["trimet"],
-                         f"trimet ladder saturated at {max(seen)}, not MAX_BACKOFF")
-        self.assertTrue(all(b <= cl.MAX_BACKOFF["trimet"] for b in seen))
-        self.assertGreater(len(set(seen)), 1, "backoff never climbed at all")
-
-    def test_tomtom_tiles_backoff_saturates_at_the_table_value(self):
-        cfg = dict(cl.DEFAULTS, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999",
-                   PDXTM_TOMTOM_TILE_ZOOM="12", PDXTM_TOMTOM_TILE_DAILY_CAP="100000")
-        seen = self._saturate(cfg, "tomtom_tiles")
-        self.assertEqual(max(seen), cl.MAX_BACKOFF["tomtom_tiles"])
-
-    def test_tomtom_segments_backoff_saturates_at_the_table_value(self):
-        cfg = dict(cl.DEFAULTS, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999",
-                   PDXTM_TOMTOM_SEGMENT_DAILY_CAP="100000")
-        seen = self._saturate(cfg, "tomtom_segments")
-        self.assertEqual(max(seen), cl.MAX_BACKOFF["tomtom_segments"])
-
-    # Exact, mutually exclusive predicates. A substring like "trimet" also matches
-    # developer.trimet.org/schedule/gtfs.zip, which made an earlier version of this test read the
-    # STATIC handler's save and pass while _trimet saved nothing.
-    URL_IS = {
-        "trimet": lambda u: "VehiclePositions" in u,
-        "trimet_static": lambda u: u == cl.TRIMET_GTFS_URL,
-        "tomtom_tiles": lambda u: "tile/flow" in u,
-        "tomtom_segments": lambda u: "flowSegmentData" in u,
-    }
-
     def test_every_source_persists_its_schedule_before_fetching(self):
-        # The round-2 fix landed on the tomtom handlers only; this pins all four.
-        wall = 1_700_000_000.0
-        for source, extra in (("trimet", dict(TRIMET_APP_ID="TSECRET123")),
-                              ("trimet_static", {}),
-                              ("tomtom_tiles", KEYED),
-                              ("tomtom_segments", KEYED)):
+        # Exact, mutually exclusive predicates. A substring like "trimet" also matches
+        # developer.trimet.org/schedule/gtfs.zip, which made an earlier version of this test read
+        # the STATIC handler's save and pass while _trimet saved nothing.
+        orig_fetch = cl.fetch
+        for source, extra in (("trimet", KEYED), ("trimet_static", {})):
             with self.subTest(source=source), tempfile.TemporaryDirectory() as d:
                 cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **extra)
                 seen = {}
-                orig_fetch = cl.fetch
 
                 def spy(url, timeout=20, deadline=None, pet=None, clock=None, _s=source, _d=d):
                     if self.URL_IS[_s](url) and _s not in seen:
@@ -451,15 +397,54 @@ class TestBackoffLadder(unittest.TestCase):
                     return 200, "application/octet-stream", b"payload"
                 cl.fetch = spy
                 try:
-                    cl.Collector(clock=FakeClock(), pet=lambda: None, wall=lambda: wall).run_once(
-                        cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+                    make().run_once(cfg, NOW)
                 finally:
                     cl.fetch = orig_fetch
-                # Its own deferred epoch must already be on disk — not merely a file some EARLIER
-                # source wrote this cycle, which would still carry this source's stale epoch.
                 self.assertIsNotNone(seen.get(source), f"{source} fetched with no schedule.json at all")
-                self.assertGreater(seen[source], wall,
+                self.assertGreater(seen[source], WALL,
                                    f"{source} fetched before persisting its own deferred epoch")
+
+
+class TestBackoffLadder(unittest.TestCase):
+    """Behavioural, not a source grep: drive real failures until the ladder saturates."""
+
+    def setUp(self):
+        self.orig_fetch = cl.fetch
+
+    def tearDown(self):
+        cl.fetch = self.orig_fetch
+
+    def test_trimet_backoff_saturates_at_the_table_value(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999")
+            clock = FakeClock()
+            c = make(clock=clock)
+            cl.fetch = fake_fetch([], status=500)
+            seen = []
+            for _ in range(12):
+                c.run_once(cfg, NOW)
+                seen.append(c.backoff["trimet"])
+                clock.t += 10_000_000
+            self.assertEqual(max(seen), cl.MAX_BACKOFF["trimet"],
+                             f"trimet ladder saturated at {max(seen)}, not MAX_BACKOFF")
+            self.assertTrue(all(b <= cl.MAX_BACKOFF["trimet"] for b in seen))
+            self.assertGreater(len(set(seen)), 1, "backoff never climbed at all")
+
+    def test_backoff_ladder_survives_a_restart(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999")
+            clock = FakeClock()
+            c1 = make(clock=clock)
+            cl.fetch = fake_fetch([], status=500)
+            for _ in range(4):
+                c1.run_once(cfg, NOW)
+                clock.t += 10_000
+            c1.save_schedule(d)
+            self.assertGreater(c1.backoff["trimet"], 1)
+            c2 = make()
+            c2.load_schedule(cfg)
+            self.assertEqual(c2.backoff["trimet"], c1.backoff["trimet"],
+                             "the backoff ladder must survive a restart, like next_due does")
 
 
 class TestConfig(unittest.TestCase):
@@ -482,54 +467,15 @@ class TestConfig(unittest.TestCase):
             self.assertFalse(cfg.get("TRIMET_APP_ID"))
 
 
-class TestBudgetGuard(unittest.TestCase):
-    def test_spend_and_cap_persist_across_instances_and_reset_by_day(self):
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "budget.json")
-            day1 = datetime(2026, 9, 15, 12, tzinfo=timezone.utc)
-            g = cl.BudgetGuard(path)
-            self.assertEqual(g.remaining("tomtom_tiles", 10, day1), 10)
-            g.spend("tomtom_tiles", 7, day1)
-            self.assertEqual(cl.BudgetGuard(path).remaining("tomtom_tiles", 10, day1), 3)
-            day2 = datetime(2026, 9, 16, 0, 1, tzinfo=timezone.utc)
-            self.assertEqual(cl.BudgetGuard(path).remaining("tomtom_tiles", 10, day2), 10)
-
-    def test_corrupt_schedule_file_does_not_crash(self):
-        # Sibling of the budget test below — it existed for budget.json but not schedule.json.
-        # Note the honest limit: a corrupt schedule silently zeroes every next_due, so the next
-        # cycle re-pulls the 29.5 MB gtfs.zip. Only reachable via external corruption, since
-        # save_schedule writes tmp+os.replace.
-        with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
-            path = os.path.join(d, "schedule.json")
-            for bad in ('{"next_due": null}', '{"backoff": "x"}', '{"next_due": {"trimet": "soon"}}',
-                        '[1,2]', 'not json', '{"next_due": {"trimet": 1.7e9}, "backoff": {"trimet": 99}}'):
-                with open(path, "w") as f:
-                    f.write(bad)
-                c = cl.Collector(clock=FakeClock(), pet=lambda: None, wall=lambda: 1_700_000_000.0)
-                c.load_schedule(cfg)  # must not raise
-                for s in cl.SOURCES:
-                    self.assertTrue(1 <= c.backoff[s] <= cl.MAX_BACKOFF[s],
-                                    f"{bad}: {s} restored an out-of-range backoff {c.backoff[s]}")
-
-    def test_corrupt_budget_file_resets_instead_of_crashing(self):
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "budget.json")
-            for bad in ("[1,2]", "not json", '{"tomtom_tiles:2026-09-15": "seven"}'):
-                with open(path, "w") as f:
-                    f.write(bad)
-                self.assertEqual(cl.BudgetGuard(path).remaining("tomtom_tiles", 10, NOW), 10)
-
-
 class TestStore(unittest.TestCase):
     def test_store_writes_gzip_and_manifest_without_key(self):
         with tempfile.TemporaryDirectory() as d:
-            ok, entry = cl.store(d, "tomtom_segments", "p00", "json", "https://api.example/x?key=SECRET&point=1,2",
-                                 200, "application/json", b'{"a":1}', NOW)
+            ok, entry = cl.store(d, "trimet", "vehiclepositions", "pb", "https://api.example/x?appID=SECRET",
+                                 200, "application/x-protobuf", b'\x01\x02', NOW)
             self.assertTrue(ok)
             with gzip.open(os.path.join(d, entry["path"]), "rb") as f:
-                self.assertEqual(f.read(), b'{"a":1}')
-            text = read(os.path.join(d, "tomtom_segments", "manifest.jsonl"))
+                self.assertEqual(f.read(), b'\x01\x02')
+            text = read(os.path.join(d, "trimet", "manifest.jsonl"))
             self.assertEqual(json.loads(text.splitlines()[0])["sha256"], entry["sha256"])
             self.assertNotIn("SECRET", text)
 
@@ -563,79 +509,48 @@ class TestCycle(unittest.TestCase):
             calls = []
             cl.fetch = fake_fetch(calls)
             c = make()
-            r = c.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+            r = c.run_once(cfg, NOW)
             c.write_status(cfg, r, NOW)
             self.assertEqual(calls, [cl.TRIMET_GTFS_URL])
             self.assertEqual(set(r), {"trimet_static"})
             with open(os.path.join(d, "status.json")) as f:
                 st = json.load(f)
-            self.assertEqual(st["keys_present"], {"TRIMET_APP_ID": False, "TOMTOM_API_KEY": False})
-            self.assertFalse(st["tomtom_enabled"])
-            r2 = c.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+            self.assertEqual(st["keys_present"], {"TRIMET_APP_ID": False})
+            r2 = c.run_once(cfg, NOW)
             self.assertEqual(len(calls), 1)  # weekly: no immediate refetch
             self.assertEqual(r2, {})
 
-    def test_a_429_abandons_every_style_not_just_the_current_one(self):
-        # The break exited only the inner tile loop, so a second style still fired requests
-        # after the rate limit. Its segments sibling has one loop, so it was already correct.
-        with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999",
-                       PDXTM_TOMTOM_TILE_ZOOM="12", PDXTM_TOMTOM_TILE_STYLES="absolute,relative")
-            calls = []
-
-            def rate_limited(url, timeout=20, deadline=None, pet=None, clock=None):
-                calls.append(url)
-                return (429, "text/plain", b"slow down") if "tile/flow" in url else (200, "", b"payload")
-            cl.fetch = rate_limited
-            make().run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
-            self.assertEqual(sum("tile/flow" in u for u in calls), 1,
-                             "a 429 must stop the whole tile cycle, across styles")
-
-    def test_tomtom_key_without_enable_flag_never_fetches_tomtom(self):
-        with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, TOMTOM_API_KEY="KSECRET123")
-            calls = []
-            cl.fetch = fake_fetch(calls)
-            make().run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
-            self.assertFalse(any("tomtom" in u for u in calls))
-
-    def test_with_keys_and_enable_fetches_every_source_and_redacts(self):
+    def test_with_key_fetches_both_sources_and_redacts(self):
         with tempfile.TemporaryDirectory() as d:
             cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED)
             calls = []
             cl.fetch = fake_fetch(calls)
             pets = []
-            r = make(pets=pets).run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+            r = make(pets=pets).run_once(cfg, NOW)
             self.assertEqual(set(r), set(cl.SOURCES))
             self.assertTrue(any("appID=TSECRET123" in u for u in calls))
-            self.assertEqual(sum("tile/flow" in u for u in calls), 20)  # default zoom, default bbox
-            self.assertGreaterEqual(len(pets), 2 * len(calls))  # fed inside fetch and after each fetch
             for src in cl.SOURCES:
                 self.assertNotIn("SECRET", read(os.path.join(d, src, "manifest.jsonl")))
 
-    def test_store_exception_in_tiles_charges_budget_reschedules_and_does_not_stop_others(self):
+    def test_store_exception_in_one_source_reschedules_and_does_not_stop_the_other(self):
         with tempfile.TemporaryDirectory() as d:
             cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED)
             calls = []
             cl.fetch = fake_fetch(calls)
 
             def failing_store(data_dir, source, *a, **k):
-                if source == "tomtom_tiles":
+                if source == "trimet":
                     raise OSError(28, "No space left on device")
                 return self.orig_store(data_dir, source, *a, **k)
             cl.store = failing_store
             c = make()
-            budget = cl.BudgetGuard(os.path.join(d, "budget.json"))
-            r = c.run_once(cfg, budget, NOW)
-            self.assertNotIn("tomtom_tiles", r)
-            self.assertIn("tomtom_segments", r)
-            self.assertIn("trimet", r)
-            self.assertEqual(budget.remaining("tomtom_tiles", 10_000, NOW), 10_000 - 20)  # charged despite failure
-            self.assertAlmostEqual(c.next_due["tomtom_tiles"] - c.clock(), cl.ERROR_DEFER["tomtom_tiles"], delta=0.01)
-            n = sum("tile/flow" in u for u in calls)
-            self.assertEqual(n, 1)  # raised on the first store, so exactly one tile was fetched
-            c.run_once(cfg, budget, NOW)
-            self.assertEqual(sum("tile/flow" in u for u in calls), n)  # nothing refired next tick
+            r = c.run_once(cfg, NOW)
+            self.assertNotIn("trimet", r)
+            self.assertIn("trimet_static", r)  # the other source still ran
+            self.assertAlmostEqual(c.next_due["trimet"] - c.clock(), cl.ERROR_DEFER["trimet"], delta=0.01)
+            n = len(calls)
+            c.run_once(cfg, NOW)
+            self.assertEqual(len(calls), n)  # nothing refired next tick
 
     def test_static_gtfs_exception_defers_hours_not_minutes(self):
         with tempfile.TemporaryDirectory() as d:
@@ -646,7 +561,7 @@ class TestCycle(unittest.TestCase):
                 raise OSError(30, "Read-only file system")
             cl.store = failing_store
             c = make()
-            c.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+            c.run_once(cfg, NOW)
             self.assertGreaterEqual(c.next_due["trimet_static"] - c.clock(), 6 * 3600)
 
     def test_schedule_persists_across_restart_so_no_refire(self):
@@ -655,57 +570,15 @@ class TestCycle(unittest.TestCase):
             calls = []
             cl.fetch = fake_fetch(calls)
             c1 = make()
-            r = c1.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+            r = c1.run_once(cfg, NOW)
             c1.write_status(cfg, r, NOW)
+            c1.save_schedule(d)
             self.assertTrue(os.path.exists(os.path.join(d, "schedule.json")))
             n = len(calls)
             c2 = make()  # "restart": fresh instance, same data dir, same wall clock
-            r2 = c2.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+            r2 = c2.run_once(cfg, NOW)
             self.assertEqual(len(calls), n)
             self.assertEqual(r2, {})
-            self.assertGreater(c2.next_due["tomtom_tiles"] - c2.clock(), 250)
-
-    def test_segments_charge_the_budget_before_fetching_too(self):
-        # Sibling of the tiles test above: that one covered tiles only, so deleting the segments
-        # budget.spend passed the whole suite.
-        with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999")
-            cl.fetch = fake_fetch([])
-
-            def failing_store(data_dir, source, *a, **k):
-                if source == "tomtom_segments":
-                    raise OSError(28, "No space left on device")
-                return self.orig_store(data_dir, source, *a, **k)
-            cl.store = failing_store
-            c = make()
-            budget = cl.BudgetGuard(os.path.join(d, "budget.json"))
-            r = c.run_once(cfg, budget, NOW)
-            self.assertNotIn("tomtom_segments", r)
-            npoints = len(cl.parse_points(cfg["PDXTM_TOMTOM_POINTS"]))
-            self.assertEqual(budget.remaining("tomtom_segments", 10_000, NOW), 10_000 - npoints,
-                             "segments must charge before fetching, like tiles")
-            self.assertAlmostEqual(c.next_due["tomtom_segments"] - c.clock(),
-                                   cl.ERROR_DEFER["tomtom_segments"], delta=0.01)
-
-    def test_backoff_ladder_survives_a_restart(self):
-        # next_due was persisted from round 2; the ladder was not. Restarting a saturated ladder
-        # at x1 hammers an endpoint that is already failing.
-        with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, TRIMET_APP_ID="TSECRET123",
-                       PDXTM_TRIMET_STATIC_INTERVAL="999999999")
-            clock = FakeClock()
-            c1 = cl.Collector(clock=clock, pet=lambda: None, wall=lambda: 1_700_000_000.0)
-            budget = cl.BudgetGuard(os.path.join(d, "budget.json"))
-            cl.fetch = fake_fetch([], status=500)
-            for _ in range(4):
-                c1.run_once(cfg, budget, NOW)
-                clock.t += 10_000
-            c1.save_schedule(d)
-            self.assertGreater(c1.backoff["trimet"], 1)
-            c2 = cl.Collector(clock=FakeClock(), pet=lambda: None, wall=lambda: 1_700_000_000.0)
-            c2.load_schedule(cfg)
-            self.assertEqual(c2.backoff["trimet"], c1.backoff["trimet"],
-                             "the backoff ladder must survive a restart, like next_due does")
 
     def test_status_stamps_when_last_results_was_captured(self):
         with tempfile.TemporaryDirectory() as d:
@@ -722,24 +595,15 @@ class TestCycle(unittest.TestCase):
             self.assertIsNotNone(st["last_results_at"], "a sticky last_results needs a timestamp")
             self.assertIn("backoff", st)
 
-    def test_bad_config_value_isolated_to_its_source(self):
-        with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED, PDXTM_TOMTOM_TILE_DAILY_CAP="lots")
-            cl.fetch = fake_fetch([])
-            r = make().run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
-            self.assertNotIn("tomtom_tiles", r)
-            self.assertIn("tomtom_segments", r)
-            self.assertIn("trimet", r)
-
     def test_disk_guard_blocks_all_fetches(self):
         with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, TRIMET_APP_ID="TSECRET123")
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED)
             calls = []
             cl.fetch = fake_fetch(calls)
             orig = cl.shutil.disk_usage
             cl.shutil.disk_usage = lambda p: type("U", (), {"free": 10})()
             try:
-                r = make().run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+                r = make().run_once(cfg, NOW)
             finally:
                 cl.shutil.disk_usage = orig
             self.assertEqual(calls, [])
@@ -747,17 +611,16 @@ class TestCycle(unittest.TestCase):
 
     def test_failed_trimet_fetch_backs_off_and_recovers(self):
         with tempfile.TemporaryDirectory() as d:
-            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, TRIMET_APP_ID="TSECRET123", PDXTM_TRIMET_STATIC_INTERVAL="999999")
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999")
             clock = FakeClock()
             c = make(clock=clock)
-            budget = cl.BudgetGuard(os.path.join(d, "budget.json"))
             cl.fetch = fake_fetch([], status=403)
-            c.run_once(cfg, budget, NOW)
+            c.run_once(cfg, NOW)
             self.assertEqual(c.backoff["trimet"], 2)
             self.assertAlmostEqual(c.next_due["trimet"] - clock(), 60, delta=0.01)
             clock.t += 61
             cl.fetch = fake_fetch([], status=200)
-            c.run_once(cfg, budget, NOW)
+            c.run_once(cfg, NOW)
             self.assertEqual(c.backoff["trimet"], 1)
             text = read(os.path.join(d, "trimet", "manifest.jsonl"))
             self.assertEqual([json.loads(l)["status"] for l in text.splitlines()], [403, 200])

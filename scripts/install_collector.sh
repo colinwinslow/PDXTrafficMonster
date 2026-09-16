@@ -19,6 +19,4 @@ systemctl status "$unit" --no-pager -n 6
 echo
 echo "Keys go in /home/claude/.config/pdxtrafficmonster/env, owned by claude, mode 600, one per line:"
 echo "  TRIMET_APP_ID=..."
-echo "  TOMTOM_API_KEY=..."
-echo "  PDXTM_TOMTOM_ENABLED=1    # only after reading TomTom's developer T&C (ADR-0001 Open)"
 echo "No restart needed; the collector re-reads that file every cycle."

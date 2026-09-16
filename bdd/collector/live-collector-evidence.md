@@ -1,9 +1,14 @@
-# Evidence: live collector v0.8 — run 2026-09-16T16:05Z on claude-box
+# Evidence: live collector v1.0 — run 2026-09-16T16:51:39Z on claude-box
 
 Overall: **A PASS (live)**, **F PASS (live)**,
 **H PASS in part (live: restart-persistence half; unit: exception half)**,
-**B / C / D / E / G unit-tested, NOT LIVE-VERIFIED** (no API key exists, so no
-keyed request has ever been made). Regenerate this file when a key lands.
+**B / D / E unit-tested, NOT LIVE-VERIFIED** (no API key exists, so no keyed
+request has ever been made). Regenerate this file when a key lands.
+
+Scenarios C (TomTom daily caps) and G (TomTom terms gate) were **deleted** on
+2026-09-16 along with the TomTom sources — its T&C §11.4 prohibits storing
+Results, which is this collector's entire function (ADR-0001 amendment,
+`docs/research/samples/README.md` §4).
 
 **The anchor artifact does not exist yet.** `live-collector-bdd.md` defines it
 as the first real `trimet/<day>/*_vehiclepositions.pb.gz`, which requires an
@@ -68,7 +73,7 @@ systemctl show pdxtrafficmonster-collector.service -p MainPID -p NRestarts -p Wa
 ## Unit test run (raw tail)
 
 ```
-Ran 48 tests in 1.765s
+Ran 40 tests in 0.788s
 
 OK
 ```
@@ -175,6 +180,18 @@ its own first mutation harness was a blind scan — it passed a nonexistent
 null controls. A scan that cannot fail proves nothing, whether it is a test or
 the harness running the tests.
 
+**A sixth control came free, from CPU load rather than mutation.** Running the
+suite with the machine saturated made `test_multi_chunk_body_pets_more_than_once`
+fail with `1 not greater than 1`: with no delay between writes the whole 40 KB
+was already in the socket buffer, and `read1()` is entitled to return all of it
+in one call. The test had asserted a coalescing behaviour the OS never promised
+— the same disease as the hand-written fake below, but in a real-socket test.
+Both timing-sensitive tests now space their writes so the behaviour under test
+is the binding one, and the suite was re-run 8× under sustained load to confirm.
+This one matters beyond the test: the installer runs the suite as a deploy gate,
+so a flaky test is a deploy that fails for no reason — or, worse, a gate that
+passes for no reason.
+
 The truncation tests deliberately drive a **real socket** (`TrickleServer`: a
 localhost server that declares `Content-Length: 1000` then sends 100 bytes),
 because the earlier hand-written fake modelled `read1()` *raising* — a path
@@ -183,46 +200,44 @@ branch that does not occur in production and passed while the code was broken.
 
 ## Scenario A — runs before any key exists: PASS (live)
 
-All of the below is from the **current v0.7 process, PID 2182331** (started
-2026-09-16 09:00:20 PDT = 16:00:20Z), except the waiting-line cadence, which is
-quoted from the v0.6 process (PID 2172056) and noted as such.
+All of the below is from the **current v1.0 process, PID 2197505** (started
+2026-09-16 09:51:39 PDT = 16:51:39Z).
 
 Given — env file absent. When — installed, started from `/usr/local/lib`:
 ```
-Active: active (running) since Wed 2026-09-16 09:00:20 PDT
-Main PID: 2182331 (python3)
+Active: active (running) since Wed 2026-09-16 09:51:39 PDT
+Main PID: 2197505 (python3)
 ```
-Then — the legacy flat `schedule.json` was migrated in place, epochs preserved
-byte-for-byte, and the 7-day static epoch honoured across the format change:
-```
-before: {"trimet": 1789574465.116559, "trimet_static": 1790178171.695807, ...}
-after:  {"next_due": {"trimet": 1789574465.1165593, "trimet_static": 1790178171.6958072, ...},
-         "backoff": {"trimet": 1, "trimet_static": 1, "tomtom_tiles": 1, "tomtom_segments": 1}}
-$ wc -l < trimet_static/manifest.jsonl
-2      <- still 2: no refetch triggered by the format change
-```
-Then — heartbeat (1 s old when sampled), keys false, TomTom gated, disk healthy:
+Then — heartbeat fresh, key absent, disk healthy, and **no TomTom fields
+anywhere** (the removal reached the on-disk state, not just the source):
 ```
 $ date -u +%FT%TZ ; cat status.json
-2026-09-16T16:00:47Z
+2026-09-16T16:51:54Z
 {
- "heartbeat": "2026-09-16T16:00:45.265774+00:00",
+ "heartbeat": "2026-09-16T16:51:54.685092+00:00",
  "env_error": null,
- "keys_present": {"TRIMET_APP_ID": false, "TOMTOM_API_KEY": false},
- "tomtom_enabled": false,
- "disk_free_bytes": 27748970496,
+ "keys_present": {"TRIMET_APP_ID": false},
+ "disk_free_bytes": 27722256384,
  "last_results": {},
  "last_results_at": null,
- "backoff": {"trimet": 1, "trimet_static": 1, "tomtom_tiles": 1, "tomtom_segments": 1},
- "next_due_in_s": {"trimet": 20, "trimet_static": 603726, "tomtom_tiles": 25, "tomtom_segments": 25}
+ "backoff": {"trimet": 1, "trimet_static": 1},
+ "next_due_in_s": {"trimet": 15, "trimet_static": 600657}
 }
+$ cat schedule.json
+{"next_due": {"trimet": 1789577529.5496492, "trimet_static": 1790178171.6958086}, "backoff": {"trimet": 1, "trimet_static": 1}}
 ```
-`last_results_at` and `backoff` are new in v0.7: a sticky `last_results` with no
-timestamp cannot be distinguished from a fresh one, and the ladder state was
-previously invisible to anyone reading `status.json` to diagnose a stall.
-`schedule.json` independently agrees with those due times (`trimet: 55s`,
-`trimet_static: 604061s`, both tomtom `60s`), and the process is in
-`hrtimer_nanosleep` — i.e. idling on its tick, not wedged.
+The static epoch `1790178171.69` is byte-identical to the one written by v0.4
+on 2026-09-16 — it has now survived four format/shape migrations (flat →
+nested, 4-source → 2-source) without triggering a spurious 29.5 MB re-pull.
+
+Then — **no TomTom directory was ever created**, so not one prohibited byte was
+ever written. This is the gate in ADR-0003 doing its job:
+```
+$ find /home/claude/data/pdxtrafficmonster -mindepth 1 -maxdepth 1 | sort
+/home/claude/data/pdxtrafficmonster/schedule.json
+/home/claude/data/pdxtrafficmonster/status.json
+/home/claude/data/pdxtrafficmonster/trimet_static
+```
 
 Then — no keyed request: only `trimet_static/` exists; no `trimet/`,
 `tomtom_tiles/`, `tomtom_segments/` directory has ever been created.
@@ -236,8 +251,8 @@ Then — exactly **two** waiting lines on this boot, one per missing credential:
 $ journalctl ... _PID=2172056 | grep -c waiting
 2
 ```
-Two, not three: `tomtom_tiles` and `tomtom_segments` share one gate warning for
-the single missing TomTom key. Note they appear 45 s and 50 s after start, not
+Now one warning, not two: only the TriMet AppID remains. Note it appears after
+start, not
 at startup — each source warns when it first comes *due*, and the schedule
 restored from the previous boot deferred them. (This briefly looked like a
 stall; it is not — the heartbeat above was 1 s old throughout.) The

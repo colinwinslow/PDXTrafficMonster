@@ -24,20 +24,20 @@ for draft vs accepted). The deliverable is a pre-rendered video: ribbons on
 real OSM road geometry for I-5/I-405/I-205, widened by PORTAL loop-detector
 volume (real 2026-09-01 baseline, PORTAL archives it), plus an arterial layer
 on MLK / Interstate / Williams-Vancouver / Broadway-Weidler colored by speed
-only, from TriMet bus positions (proxy) and TomTom probe speeds (direct) —
-both live-only, collected from 2026-09-15, with the post-reopening weeks as
-their baseline. Rendering is a Python pipeline (GeoPandas + matplotlib
+only, from TriMet bus positions (a proxy — buses and cars move alike in
+congestion, cars are faster in free flow). Live-only, collected from
+2026-09-15, with the post-reopening weeks as its baseline. TomTom was evaluated
+and removed on licence grounds (ADR-0001 amendment). Rendering is a Python pipeline (GeoPandas + matplotlib
 LineCollection → PNG per frame → ffmpeg).
 
 Two things a new session must know that the code doesn't say:
 
 - **A collector is running on claude-box** (`pdxtrafficmonster-collector.service`,
   `scripts/collect_live.py`) writing to `/home/claude/data/pdxtrafficmonster/`
-  (off-repo). It is idle until `TRIMET_APP_ID` and `TOMTOM_API_KEY` exist in
+  (off-repo). It is idle until `TRIMET_APP_ID` exists in
   `/home/claude/.config/pdxtrafficmonster/env` (human registers; never paste
-  keys into a chat), and TomTom additionally needs `PDXTM_TOMTOM_ENABLED=1`
-  after its T&C is read (ADR-0003). Static GTFS snapshots need no key and
-  should already be landing weekly. Check `status.json` first thing; the
+  keys into a chat). Static GTFS snapshots need no key and should already be
+  landing weekly. Check `status.json` first thing; the
   running copy is `/usr/local/lib/pdxtrafficmonster/collect_live.py`, so a
   code change needs `scripts/install_collector.sh` to take effect.
 - **PORTAL has no Portland arterial data** — checked three ways, recorded in
@@ -58,8 +58,9 @@ the collector evidence the moment a key lands. See `STATUS.md`.
 ## Constraints / guardrails
 
 - Don't use Waze data or scrape Google Maps traffic tiles — `CLAUDE.md`
-  invariant 2. TriMet's API terms permit redistribution; TomTom's developer
-  T&C are unread (ADR-0001 "Open") — if they forbid archiving, drop that layer.
+  invariant 2. TriMet's API terms permit redistribution. **TomTom is settled:
+  ruled out 2026-09-16, T&C §11.4 prohibits storing Results — do not re-add
+  it** (ADR-0001 amendment, samples README §4).
 - Arterials are speed-colored, never volume-widened — nothing on a surface
   street is counted (invariant 1).
 - The closure is time-boxed (started 2026-09-11, ~5 weeks). Every uncollected
