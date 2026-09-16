@@ -14,9 +14,13 @@ No paired spec (`docs/specs/live-collector.md`) yet: the collector was built
 ahead of its spec because both keyed sources are live-only and every
 uncollected day is lost (ADR-0003). Spec is retroactive (STATUS.md).
 
-Supersedes the earlier evidence in git history. **Seven** architecture review
+Supersedes the earlier evidence in git history. **Eight** architecture review
 rounds ran against this artifact; each returned CONCERNS and the findings were
-fixed, hence v0.8. Round 8 is pending at the time of writing.
+fixed, hence v0.8 — except round 8, which verified the code **CLEAN** (20
+real-socket paths through `fetch()`, 60 mutations with null controls, "MUST FIX:
+none") and ended the loop. Round 8's remaining findings are missing test
+coverage over correct code and are recorded in ADR-0003 "Open" rather than
+fixed.
 
 Two findings are worth carrying forward, because both are the same defect
 shape — a fix applied to one place and not its siblings:
@@ -120,6 +124,13 @@ Ran 4 tests — OK   (the ladder test pins behaviour, not source text)
 G  plain e.read() restored (no deadline/pet on the error body)
    FAIL: test_dribbling_error_body_honours_the_deadline_and_pets_the_watchdog
    (suite also ran 5.2s vs 1.7s — the blocking read visible in the runtime)
+   RETRACTED as of round 7: adding ERROR_BODY_LIMIT silently hollowed this test
+   out — the 2000-byte cap ended the read before the deadline could, so the
+   deadline assertion became vacuous and control G stopped proving anything.
+   Re-armed in v0.8 with a 0.5s deadline (binding well before the ~2.0s cap)
+   plus an explicit guard that the cap did NOT end the read. Re-verified:
+   deleting the error-path deadline now FAILS with "the cap, not the deadline,
+   ended this read — the test would prove nothing".
 H  trimet_static's error defer deleted
    FAIL: test_erroring_static_source_records_a_manifest_line_and_defers_for_hours
 I  tomtom_segments' budget.spend deleted
@@ -158,7 +169,11 @@ per-source predicates plus an assertion on the persisted **value**. (2) The
 first `TestSchedule` pair asserted only inequalities (`<= max_defer`,
 `<= clock`), which a collector that ignored `schedule.json` entirely satisfies
 vacuously, since `next_due` just stays `0.0`. Rewritten to assert exact waits.
-All controls shown are from the corrected tests.
+All controls shown are from the corrected tests. Round 8 also reported that
+its own first mutation harness was a blind scan — it passed a nonexistent
+`--timeout` flag and reported 35/35 mutations "killed" — caught only by running
+null controls. A scan that cannot fail proves nothing, whether it is a test or
+the harness running the tests.
 
 The truncation tests deliberately drive a **real socket** (`TrickleServer`: a
 localhost server that declares `Content-Length: 1000` then sends 100 bytes),

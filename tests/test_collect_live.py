@@ -244,14 +244,19 @@ class TestRealSocketTruncation(unittest.TestCase):
         # A plain e.read() is one blocking whole-body read: it would return only after the whole
         # 5 kB dribbled in (~50 s), honouring no deadline and petting zero times, stalling every
         # source until SIGABRT. The error body must get the same guarded read as a success body.
+        # The deadline must bind BEFORE ERROR_BODY_LIMIT does, or this asserts nothing: reaching
+        # the 2000-byte cap here takes ~2.0s, so a 0.5s deadline is the only thing that can end
+        # the read early. (Round 7 added the cap and silently hollowed out this exact test.)
         srv = TrickleServer(declared=5000, actual=5000, chunk=50, status=b"503 Service Unavailable", delay=0.05)
         self.addCleanup(srv.close)
         pets = []
         t0 = time.monotonic()
-        st, _, body = cl.fetch(srv.url, deadline=1.5, pet=lambda: pets.append(1))
+        st, _, body = cl.fetch(srv.url, deadline=0.5, pet=lambda: pets.append(1))
         elapsed = time.monotonic() - t0
         self.assertEqual(st, 503, "the HTTP status must still reach the manifest")
-        self.assertLess(elapsed, 4.0, f"deadline not honoured on the error body ({elapsed:.1f}s)")
+        self.assertLess(len(body), cl.ERROR_BODY_LIMIT,
+                        "the cap, not the deadline, ended this read — the test would prove nothing")
+        self.assertLess(elapsed, 1.5, f"deadline not honoured on the error body ({elapsed:.1f}s)")
         self.assertGreater(len(pets), 0, "watchdog never petted while reading the error body")
 
     def test_erroring_static_source_records_a_manifest_line_and_defers_for_hours(self):

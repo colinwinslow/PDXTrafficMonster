@@ -67,6 +67,32 @@ the artifact.
   aggregation job — those wait for the frame.
 
 **Open:**
+
+*Deferred deliberately.* Eight architecture-review rounds ran against the
+collector. Round 8 verified the code CLEAN — 20 real-socket paths through
+`fetch()`, 60 mutations with null controls, no correctness, data-integrity or
+silent-stop defect — and the loop was stopped there. What remains below is
+**missing test coverage over correct code**, plus small honesty gaps. It is
+recorded rather than fixed because the project's actual blocker is the two API
+keys, not collector robustness, and because each additional round has been
+returning findings of lower severity than the last.
+
+- **Unpinned-but-correct guards** (a mutation survives the suite): `_fetch`'s
+  `deadline=DEADLINE[source]` wiring; `urlopen(timeout=...)`; the error path's
+  inner `except (OSError, ValueError, HTTPException)` — i.e. the round-5 escape
+  itself has no regression test; `ok = status == 200 and len(body) > 0`, so an
+  empty 200 stored as a real capture is unpinned.
+- **Sibling gaps in the tests** (not the code): the 429 break is pinned for
+  tiles but not segments; backoff's effect on `next_due` is asserted for
+  `trimet` only. The code is correct for all of them.
+- **A truncated error body is reported with its short length unmarked**, while
+  a *capped* one is marked `(limit-truncated)` — the same argument as the cap
+  marker, applied to one sibling and not the other.
+- `urllib.request.Request()` sits outside `fetch()`'s `try`; unreachable today
+  because every URL is an https module constant.
+- `(limit-truncated)` is written bare when a server sends no `Content-Type`.
+- `budget.json` keys for past days are pruned only on write; `warn_hourly` has
+  no cap on distinct keys.
 - Nothing alerts on a stale heartbeat; failures that keep the process alive
   are found by looking (`status.json`). Cheap to add via a timer if the
   closure runs long.
