@@ -1,4 +1,4 @@
-# Evidence: live collector v0.5 — run 2026-09-16T15:50:10Z on claude-box
+# Evidence: live collector v0.6 — run 2026-09-16T15:54:19Z on claude-box
 
 Overall: **A PASS (live)**, **F PASS (live)**,
 **H PASS in part (live: restart-persistence half; unit: exception half)**,
@@ -14,16 +14,23 @@ No paired spec (`docs/specs/live-collector.md`) yet: the collector was built
 ahead of its spec because both keyed sources are live-only and every
 uncollected day is lost (ADR-0003). Spec is retroactive (STATUS.md).
 
-Supersedes the v0.1/v0.2/v0.4 evidence in git history. Four architecture review
+Supersedes the earlier evidence in git history. **Five** architecture review
 rounds ran against this artifact; each returned CONCERNS and the findings were
-fixed, hence v0.5. Round 4 caught the most serious defect of the series, and it
-was **introduced by a round-3 fix**: switching to `read1()` (to make the
-watchdog pet fire per recv) silently re-opened the truncation hole that the
-other round-3 fix had just closed, because `read1()` returns `b""` rather than
-raising on a short `Content-Length` body. A truncated 29.5 MB `gtfs.zip` would
-have been archived as a complete 200 with a sha256 over partial bytes —
-fabricated provenance, on the only source that has ever fetched. Round 5 is
-pending at the time of writing.
+fixed, hence v0.6. Round 6 is pending at the time of writing.
+
+Two findings are worth carrying forward, because both are the same defect
+shape — a fix applied to one place and not its siblings:
+
+- **Round 4:** switching to `read1()` (a round-3 fix, to make the watchdog pet
+  fire per recv) silently re-opened the truncation hole that the *other*
+  round-3 fix had just closed, because `read1()` returns `b""` rather than
+  raising on a short `Content-Length` body. A truncated 29.5 MB `gtfs.zip`
+  would have been archived as a complete 200 with a sha256 over partial bytes.
+- **Round 5:** the resulting truncation guard was added to the success branch
+  but not the `HTTPError` branch, where `e.read()` on a short error body raises
+  `IncompleteRead` *inside* an except block that the general handler does not
+  cover. It escaped `fetch()` entirely: no manifest line, no backoff ladder,
+  green heartbeat. Both now closed and pinned by real-socket tests.
 
 Commands, verbatim, from repo root unless noted:
 
@@ -40,7 +47,7 @@ systemctl show pdxtrafficmonster-collector.service -p MainPID -p NRestarts -p Wa
 ## Unit test run (raw tail)
 
 ```
-Ran 29 tests in 0.073s
+Ran 39 tests in 0.238s
 
 OK
 ```
@@ -78,9 +85,25 @@ FAIL: test_a_stored_epoch_is_restored_as_the_exact_remaining_wait
 FAIL: test_future_epoch_is_clamped_to_exactly_the_sources_max_defer
 FAIL: test_past_epoch_makes_a_source_due_immediately
 
---- control: a handler's backoff cap hard-coded to 32, diverging from MAX_BACKOFF ---
-FAIL: test_max_backoff_table_matches_what_the_handlers_actually_cap_at
+--- control: unguarded e.read() restored on the HTTPError branch (round-5 finding 1) ---
+ERROR: test_truncated_error_body_still_yields_its_status_not_an_escape
+ERROR: test_erroring_source_records_a_manifest_line_and_backs_off
+http.client.IncompleteRead: IncompleteRead(50 bytes read, 4950 more expected)
+   journal: "trimet_static: cycle error IncompleteRead ...; deferring 21600s"
+   (i.e. escaped fetch(), no manifest line, no backoff ladder)
+
+--- control: a handler caps backoff with a literal 4 instead of MAX_BACKOFF ---
+FAIL: test_trimet_backoff_saturates_at_the_table_value
+AssertionError: 4 != 16 : trimet ladder saturated at 4, not MAX_BACKOFF
+
+--- brittleness check: behaviour-preserving refactor (cap = MAX_BACKOFF[...]; min(..., cap)) ---
+Ran 4 tests — OK   (the ladder test pins behaviour, not source text)
 ```
+
+The backoff test was itself rewritten this round: round 5 showed the original
+grepped the source, which made it simultaneously tautological (it could not see
+a wrong *value*) and brittle (a behaviour-preserving refactor failed it). It
+now drives real failures until the ladder saturates.
 
 **Two controls failed to fail, and each exposed a defect in the test rather
 than in the code.** (1) `test_every_source_persists_its_schedule_before_fetching`
@@ -101,34 +124,52 @@ branch that does not occur in production and passed while the code was broken.
 
 ## Scenario A — runs before any key exists: PASS (live)
 
+All of the below is from the **current v0.6 process, PID 2172056**.
+
 Given — env file absent. When — installed, started from `/usr/local/lib`:
 ```
-Active: active (running) since Wed 2026-09-16 08:47:01 PDT
-Main PID: 2159746 (python3)
-Sep 16 08:47:01 python3[2159746]: 2026-09-16T15:47:01+00:00 collector starting; env file /home/claude/.config/pdxtrafficmonster/env
+Active: active (running) since Wed 2026-09-16 08:54:19 PDT
+Main PID: 2172056 (python3)
+2026-09-16T08:54:19-07:00 python3[2172056]: 2026-09-16T15:54:19+00:00 collector starting; env file /home/claude/.config/pdxtrafficmonster/env
 ```
-Then — heartbeat, keys false, TomTom gated, disk healthy:
+Then — heartbeat (1 s old when sampled), keys false, TomTom gated, disk healthy:
 ```
+$ date -u +%FT%TZ ; cat status.json
+2026-09-16T15:55:10Z
 {
- "heartbeat": "2026-09-16T15:47:06.571147+00:00",
+ "heartbeat": "2026-09-16T15:55:09.997277+00:00",
  "env_error": null,
  "keys_present": {"TRIMET_APP_ID": false, "TOMTOM_API_KEY": false},
  "tomtom_enabled": false,
- "disk_free_bytes": 27761475584,
+ "disk_free_bytes": 27758915584,
  "last_results": {},
- "next_due_in_s": {"trimet": 49, "trimet_static": 604545, "tomtom_tiles": 54, "tomtom_segments": 54}
+ "next_due_in_s": {"trimet": 55, "trimet_static": 604062, "tomtom_tiles": 60, "tomtom_segments": 60}
 }
 ```
+`schedule.json` independently agrees with those due times (`trimet: 55s`,
+`trimet_static: 604061s`, both tomtom `60s`), and the process is in
+`hrtimer_nanosleep` — i.e. idling on its tick, not wedged.
+
 Then — no keyed request: only `trimet_static/` exists; no `trimet/`,
 `tomtom_tiles/`, `tomtom_segments/` directory has ever been created.
 Then — watchdog fed (`WatchdogUSec=20min`, `NRestarts=0`); on the v0.3 build
 the monotonic watchdog timestamp was observed advancing across a 12 s sample
 (1013606937492 → 1013616941106).
-
-Caveat: the "one waiting line per hour" cadence was measured on v0.1
-(34 lines / 16.5 h uptime, exact match to 2 × ceil(16.5)). Not re-measured
-here. Note it is **two** lines per hour, not three: `tomtom_tiles` and
-`tomtom_segments` share one gate warning for the single missing TomTom key.
+Then — exactly **two** waiting lines on this boot, one per missing credential:
+```
+2026-09-16T08:55:04-07:00 python3[2172056]: trimet: no TRIMET_APP_ID in ...; waiting
+2026-09-16T08:55:09-07:00 python3[2172056]: tomtom: no TOMTOM_API_KEY in ...; waiting
+$ journalctl ... _PID=2172056 | grep -c waiting
+2
+```
+Two, not three: `tomtom_tiles` and `tomtom_segments` share one gate warning for
+the single missing TomTom key. Note they appear 45 s and 50 s after start, not
+at startup — each source warns when it first comes *due*, and the schedule
+restored from the previous boot deferred them. (This briefly looked like a
+stall; it is not — the heartbeat above was 1 s old throughout.) The
+one-per-hour throttle itself was measured on v0.1 (34 lines / 16.5 h uptime,
+exact match to 2 × ceil(16.5)) and the `warn_hourly` path is unchanged since,
+apart from its clock source.
 
 ## Scenario F — static GTFS without any key: PASS (live)
 

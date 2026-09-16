@@ -14,6 +14,8 @@ Then it stays up (survives its systemd watchdog window), writes `status.json`
   static-GTFS snapshot of Scenario F), and logs one "waiting" line per missing
   **credential** per hour — two, not three: `tomtom_tiles` and
   `tomtom_segments` share a single warning for the one absent TomTom key.
+  The first pair appears when each source first comes *due* (which a restored
+  schedule may defer past startup), not at the moment the process starts.
 
 ## Scenario B — a key added later is picked up without a restart
 Given the service is running with no keys

@@ -70,6 +70,18 @@ the artifact.
 - Nothing alerts on a stale heartbeat; failures that keep the process alive
   are found by looking (`status.json`). Cheap to add via a timer if the
   closure runs long.
+- **Truncation is undetectable for close-delimited bodies.** The collector
+  rejects a short response by comparing delivered bytes against the declared
+  `Content-Length` (and catches `IncompleteRead` for chunked). An HTTP/1.0 or
+  `Connection: close` body declares neither, so a truncated one would be
+  archived as complete. Every endpoint this collector fetches serves
+  `Content-Length` or chunked (verified for `developer.trimet.org`), so the
+  gap is currently unreachable — but it is a gap, not a guarantee.
+- **`fetched_at` is cycle start, not per-request time.** Handlers run
+  sequentially within one cycle, so a snapshot taken after a slow download can
+  carry a timestamp — and a UTC day-partition directory — up to ~15 min early.
+  Harmless at the closure's hourly/daily granularity; would need fixing before
+  anything reasons about sub-minute timing or a midnight boundary.
 - The restored-schedule clamp is weakest exactly where loss is most
   expensive: for `trimet_static` it resolves to the 7-day interval itself, so
   a clock-ahead epoch is "clamped" to a full week's park — one missed feed

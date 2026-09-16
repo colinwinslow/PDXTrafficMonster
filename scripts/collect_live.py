@@ -27,7 +27,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 ENV_FILE = os.environ.get("PDXTM_ENV_FILE", "/home/claude/.config/pdxtrafficmonster/env")
-USER_AGENT = "PDXTrafficMonster-collector/0.5 (+https://github.com/colinwinslow/PDXTrafficMonster)"
+USER_AGENT = "PDXTrafficMonster-collector/0.6 (+https://github.com/colinwinslow/PDXTrafficMonster)"
 TRIMET_VP_URL = "https://developer.trimet.org/ws/V1/VehiclePositions"
 TRIMET_GTFS_URL = "https://developer.trimet.org/schedule/gtfs.zip"
 TOMTOM_TILE_URL = "https://api.tomtom.com/traffic/map/4/tile/flow/{style}/{z}/{x}/{y}.pbf"
@@ -162,7 +162,12 @@ def snapshot_path(data_dir, source, name, ext, now, compress=True):
 
 
 class BudgetGuard:
-    """Per-source, per-UTC-day request counter persisted to disk."""
+    """Per-source, per-UTC-day request counter persisted to disk.
+
+    Only the TomTom sources are budgeted, deliberately: they draw on a metered monthly free
+    tier that a bug could exhaust, whereas TriMet publishes no request quota and its own
+    fixed intervals bound its call rate. If TriMet ever publishes a quota, budget it too.
+    """
 
     def __init__(self, path):
         self.path = path
@@ -214,11 +219,22 @@ def fetch(url, timeout=20, deadline=None, pet=None, clock=time.monotonic):
             # is archived as a complete 200 with a sha256 over partial bytes — fabricated
             # provenance, which invariant 1 forbids. r.length is the undelivered remainder
             # (None for chunked, where IncompleteRead *is* raised and caught below).
+            # Gap, accepted: r.length is also None for a close-delimited body (HTTP/1.0 or
+            # Connection: close), where truncation is undetectable by construction. Every source
+            # this collector fetches serves Content-Length or chunked — see ADR-0003 "Open".
             if getattr(r, "length", None):
                 return 0, "IncompleteRead", b""
             return r.status, r.headers.get("Content-Type", ""), b"".join(chunks)
     except urllib.error.HTTPError as e:
-        return e.code, e.headers.get("Content-Type", "") if e.headers else "", e.read()[:2000]
+        # e.read() can itself raise IncompleteRead (a short error body) — and raising HERE escapes
+        # fetch() entirely, because this except block is not covered by the one below. That loses
+        # the manifest line AND the backoff ladder for a source that is merely erroring, which is
+        # the "stops collecting while looking healthy" failure this collector exists to avoid.
+        try:
+            err_body = e.read()[:2000]
+        except (OSError, ValueError, http.client.HTTPException):
+            err_body = b""
+        return e.code, e.headers.get("Content-Type", "") if e.headers else "", err_body
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, http.client.HTTPException) as e:
         # HTTPException covers IncompleteRead — a peer closing before Content-Length is satisfied,
         # the normal failure of a large download on a flaky link. It is NOT an OSError, and if it

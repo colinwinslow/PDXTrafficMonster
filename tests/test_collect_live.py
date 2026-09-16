@@ -170,8 +170,8 @@ class TestFetch(unittest.TestCase):
 class TrickleServer:
     """A real HTTP server that declares Content-Length and then sends fewer bytes."""
 
-    def __init__(self, declared, actual, chunk=None):
-        self.declared, self.actual, self.chunk = declared, actual, chunk
+    def __init__(self, declared, actual, chunk=None, status=b"200 OK"):
+        self.declared, self.actual, self.chunk, self.status = declared, actual, chunk, status
         self.sock = socket.socket()
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(("127.0.0.1", 0))
@@ -185,7 +185,7 @@ class TrickleServer:
             conn, _ = self.sock.accept()
             with conn:
                 conn.recv(65536)
-                conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\n"
+                conn.sendall(b"HTTP/1.1 " + self.status + b"\r\nContent-Type: application/zip\r\n"
                              b"Content-Length: %d\r\n\r\n" % self.declared)
                 body = b"x" * self.actual
                 step = self.chunk or len(body) or 1
@@ -227,6 +227,31 @@ class TestRealSocketTruncation(unittest.TestCase):
         st, _, body = cl.fetch(srv.url, pet=lambda: pets.append(1))
         self.assertEqual((st, len(body)), (200, 40000))
         self.assertGreater(len(pets), 1, "read1 should yield several recv-sized chunks")
+
+    def test_truncated_error_body_still_yields_its_status_not_an_escape(self):
+        # e.read() on a short error body raises IncompleteRead INSIDE the except HTTPError block,
+        # which is not covered by the general handler. If it escapes fetch(), the source loses
+        # both its manifest line and its backoff ladder while the process looks healthy.
+        srv = TrickleServer(declared=5000, actual=50, status=b"503 Service Unavailable")
+        self.addCleanup(srv.close)
+        st, ct, body = cl.fetch(srv.url)
+        self.assertEqual(st, 503, "a truncated error body must still report its HTTP status")
+
+    def test_erroring_source_records_a_manifest_line_and_backs_off(self):
+        srv = TrickleServer(declared=5000, actual=50, status=b"403 Forbidden")
+        self.addCleanup(srv.close)
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
+            orig = cl.TRIMET_GTFS_URL
+            cl.TRIMET_GTFS_URL = srv.url
+            try:
+                c = make()
+                r = c.run_once(cfg, cl.BudgetGuard(os.path.join(d, "budget.json")), NOW)
+            finally:
+                cl.TRIMET_GTFS_URL = orig
+            self.assertEqual(r["trimet_static"][0], 403)
+            entry = json.loads(read(os.path.join(d, "trimet_static", "manifest.jsonl")).splitlines()[0])
+            self.assertEqual((entry["status"], entry["path"]), (403, None))
 
     def test_truncated_download_is_recorded_in_the_manifest_and_no_file_written(self):
         srv = TrickleServer(declared=1000, actual=100)
@@ -283,15 +308,60 @@ class TestSchedule(unittest.TestCase):
             for s in cl.SOURCES:
                 self.assertAlmostEqual(c.next_due[s] - c.clock(), 0.0, delta=0.01)
 
-    def test_max_backoff_table_matches_what_the_handlers_actually_cap_at(self):
-        # The clamp in load_schedule and the caps in the handlers must not drift apart.
-        src = read(os.path.join(os.path.dirname(__file__), "..", "scripts", "collect_live.py"))
-        for s, n in cl.MAX_BACKOFF.items():
-            if n == 1:
-                continue  # no backoff ladder for this source
-            expected = f'min(self.backoff["{s}"] * 2, MAX_BACKOFF["{s}"])'
-            self.assertTrue(expected in src,  # not assertIn: it would dump the whole module
-                            f"{s} caps its backoff with a literal instead of MAX_BACKOFF[{s!r}]")
+    def test_clamp_never_shortens_a_legitimate_maximal_defer(self):
+        # If max_defer < interval * MAX_BACKOFF, load_schedule would pull a correctly-backed-off
+        # source forward on restart — the clamp turning into a spend amplifier.
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cl.DEFAULTS, PDXTM_DATA_DIR=d)
+            c = cl.Collector(clock=FakeClock(), pet=lambda: None, wall=lambda: self.WALL)
+            for s in cl.SOURCES:
+                interval = float(cfg[cl.INTERVAL_VAR[s]])
+                self.assertGreaterEqual(c.max_defer(s, cfg) + 0.01, interval * cl.MAX_BACKOFF[s],
+                                        f"{s}: clamp is tighter than its own maximal backoff")
+
+
+class TestBackoffLadder(unittest.TestCase):
+    """Behavioural, not a source grep: drive real failures until the ladder saturates."""
+
+    def setUp(self):
+        self.orig_fetch = cl.fetch
+
+    def tearDown(self):
+        cl.fetch = self.orig_fetch
+
+    def _saturate(self, cfg, source, cycles=12):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = dict(cfg, PDXTM_DATA_DIR=d)
+            clock = FakeClock()
+            c = cl.Collector(clock=clock, pet=lambda: None, wall=lambda: 1_700_000_000.0)
+            budget = cl.BudgetGuard(os.path.join(d, "budget.json"))
+            cl.fetch = fake_fetch([], status=500)
+            seen = []
+            for _ in range(cycles):
+                c.run_once(cfg, budget, NOW)
+                seen.append(c.backoff[source])
+                clock.t += 10_000_000  # always due again
+            return seen
+
+    def test_trimet_backoff_saturates_at_the_table_value(self):
+        seen = self._saturate(dict(cl.DEFAULTS, TRIMET_APP_ID="TSECRET123",
+                                   PDXTM_TRIMET_STATIC_INTERVAL="999999999"), "trimet")
+        self.assertEqual(max(seen), cl.MAX_BACKOFF["trimet"],
+                         f"trimet ladder saturated at {max(seen)}, not MAX_BACKOFF")
+        self.assertTrue(all(b <= cl.MAX_BACKOFF["trimet"] for b in seen))
+        self.assertGreater(len(set(seen)), 1, "backoff never climbed at all")
+
+    def test_tomtom_tiles_backoff_saturates_at_the_table_value(self):
+        cfg = dict(cl.DEFAULTS, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999",
+                   PDXTM_TOMTOM_TILE_ZOOM="12", PDXTM_TOMTOM_TILE_DAILY_CAP="100000")
+        seen = self._saturate(cfg, "tomtom_tiles")
+        self.assertEqual(max(seen), cl.MAX_BACKOFF["tomtom_tiles"])
+
+    def test_tomtom_segments_backoff_saturates_at_the_table_value(self):
+        cfg = dict(cl.DEFAULTS, **KEYED, PDXTM_TRIMET_STATIC_INTERVAL="999999999",
+                   PDXTM_TOMTOM_SEGMENT_DAILY_CAP="100000")
+        seen = self._saturate(cfg, "tomtom_segments")
+        self.assertEqual(max(seen), cl.MAX_BACKOFF["tomtom_segments"])
 
     # Exact, mutually exclusive predicates. A substring like "trimet" also matches
     # developer.trimet.org/schedule/gtfs.zip, which made an earlier version of this test read the
