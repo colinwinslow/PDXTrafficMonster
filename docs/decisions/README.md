@@ -28,5 +28,6 @@ Keep this list in sync at `/closeout` whenever an ADR's status changes.
 
 - 0001 — Visualization concept: animated geographic ribbon flow map; freeway volume ribbons + live arterial congestion layer (draft)
 - 0002 — Rendering stack: Python frame pipeline (GeoPandas + matplotlib → PNG → ffmpeg) (draft)
+- 0003 — Live-only sources collected before the anchor frame: bounded exception to anchor-artifact discipline (draft)
 <!-- Add new ADRs in numeric position. Sub-numbered amendments (e.g. 0001a) go
      immediately after their parent. -->
